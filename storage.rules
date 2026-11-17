@@ -6,28 +6,22 @@ service firebase.storage {
       allow read, write: if false;
     }
 
-    function isAuthed() {
-      return request.auth != null && request.auth.uid != null;
-    }
-
     function isValidImageUpload() {
       return request.resource != null &&
         request.resource.size < 5 * 1024 * 1024 &&
         request.resource.contentType.matches('image/(jpeg|jpg|png|webp|gif)');
     }
 
-    // Profile avatars: readable by any signed-in family member, writable only by the owner
     match /avatars/{uid}/{fileName} {
-      allow read: if isAuthed();
-      allow write: if isAuthed() && request.auth.uid == uid && isValidImageUpload();
-      allow delete: if isAuthed() && request.auth.uid == uid;
+      allow read: if uid.matches('^[a-zA-Z0-9_\\-]+$');
+      allow write: if uid.matches('^[a-zA-Z0-9_\\-]+$') && isValidImageUpload();
+      allow delete: if uid.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // Wish gift photos: readable by any signed-in family member, writable only by the wish owner
     match /wishes/{uid}/{fileName} {
-      allow read: if isAuthed();
-      allow write: if isAuthed() && request.auth.uid == uid && isValidImageUpload();
-      allow delete: if isAuthed() && request.auth.uid == uid;
+      allow read: if uid.matches('^[a-zA-Z0-9_\\-]+$');
+      allow write: if uid.matches('^[a-zA-Z0-9_\\-]+$') && isValidImageUpload();
+      allow delete: if uid.matches('^[a-zA-Z0-9_\\-]+$');
     }
   }
 }

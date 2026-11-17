@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
-import { AppView, ChristmasEvent, Reservation, UserProfile, Wish } from './types/models';
+import { AppView, ChristmasEvent, Reservation, UserProfile, UserRole, Wish } from './types/models';
 import { auth, getFriendlyFirebaseError } from './services/firebase';
-import { consumeGoogleRedirectResult, syncAuthenticatedUserProfile } from './services/authService';
+import {
+  consumeGoogleRedirectResult,
+  getSavedFreeSession,
+  syncAuthenticatedUserProfile,
+  syncFreeParticipantProfile,
+} from './services/authService';
 import { subscribeToActiveEvent } from './services/eventService';
 import { subscribeToParticipants } from './services/userService';
 import { subscribeToMyReservations } from './services/reservationService';
@@ -61,7 +66,7 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const hydrateUserProfile = useCallback(
+  const hydrateGoogleUser = useCallback(
     async (user: User) => {
       try {
         const profile = await syncAuthenticatedUserProfile(user);
@@ -80,23 +85,36 @@ export default function App() {
     });
   }, [notify]);
 
-  // Auth state observer (supports Free Anonymous Access + Google)
+  // Observe Firebase Google Auth AND restore local free-access family session
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
       if (user) {
-        await hydrateUserProfile(user);
+        await hydrateGoogleUser(user);
+        setAuthReady(true);
+        return;
+      }
+
+      const freeSession = getSavedFreeSession();
+      if (freeSession) {
+        try {
+          const profile = await syncFreeParticipantProfile(freeSession.uid, freeSession.name);
+          setCurrentUser(profile);
+        } catch (err) {
+          notify('error', getFriendlyFirebaseError(err));
+          setCurrentUser(null);
+        }
       } else {
         setCurrentUser(null);
       }
       setAuthReady(true);
     });
     return () => unsub();
-  }, [hydrateUserProfile]);
+  }, [hydrateGoogleUser, notify]);
 
-  // Real-time Firestore listeners once signed in
+  // Real-time Firestore listeners once signed in (either free session or Google)
   useEffect(() => {
-    if (!currentUser || !firebaseUser) {
+    if (!currentUser) {
       setParticipants([]);
       setMyReservations([]);
       setActiveEvent(null);
@@ -121,7 +139,8 @@ export default function App() {
       (err) => {
         setParticipantsLoading(false);
         notify('error', getFriendlyFirebaseError(err));
-      }
+      },
+      currentUser.role === UserRole.ADMIN
     );
 
     const unsubReservations = subscribeToMyReservations(
@@ -141,7 +160,7 @@ export default function App() {
       unsubParticipants();
       unsubReservations();
     };
-  }, [currentUser?.uid, firebaseUser?.uid]);
+  }, [currentUser?.uid, notify]);
 
   const handleNavigate = (view: AppView) => {
     if (view === 'wishlist' && currentUser) {
@@ -191,7 +210,7 @@ export default function App() {
     );
   }
 
-  if (!firebaseUser || !currentUser) {
+  if (!currentUser) {
     if (!showAuthScreen) {
       return (
         <>
@@ -208,6 +227,7 @@ export default function App() {
       <>
         <AuthView
           initialName={inviteParams.inviteName}
+          onFreeLogin={(profile) => setCurrentUser(profile)}
           onBackToWelcome={() => setShowAuthScreen(false)}
         />
         <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
@@ -265,8 +285,8 @@ export default function App() {
         {activeView === 'profile' && (
           <ProfileView
             currentUser={currentUser}
-            userEmail={firebaseUser.email || ''}
-            isAnonymous={firebaseUser.isAnonymous}
+            userEmail={firebaseUser?.email || ''}
+            isAnonymous={!firebaseUser}
             onOpenAdmin={() => handleNavigate('admin')}
             onNotify={notify}
           />

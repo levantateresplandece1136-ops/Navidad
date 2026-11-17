@@ -94,7 +94,7 @@ export function DashboardView({
           <div
             role="group"
             aria-label="Filtrar participantes"
-            className="flex items-center gap-1 p-1 bg-[#174C38]/6 rounded-xl overflow-x-auto"
+            className="flex flex-wrap items-center gap-1 p-1 bg-[#174C38]/6 rounded-xl"
           >
             {filterOptions.map((opt) => {
               const active = filterMode === opt.id;
@@ -103,7 +103,7 @@ export function DashboardView({
                   key={opt.id}
                   type="button"
                   onClick={() => setFilterMode(opt.id)}
-                  className={`min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                  className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                     active
                       ? 'bg-white text-[#174C38] shadow-2xs'
                       : 'text-[#174C38]/70 hover:text-[#174C38]'

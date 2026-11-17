@@ -5,6 +5,7 @@ import {
   canUserReserveWish,
   detectInAppBrowser,
   filterParticipants,
+  generateFreeParticipantUid,
   isValidFirestoreId,
   sanitizeExternalUrl,
   shouldExposeAvailabilityToViewer,
@@ -167,6 +168,12 @@ test('validateFreeAccessName and detectInAppBrowser validate free name entry and
 
   assert.equal(detectInAppBrowser('Mozilla/5.0 WhatsApp/2.24'), true);
   assert.equal(detectInAppBrowser('Mozilla/5.0 Chrome/120.0 Mobile Safari/537.36'), false);
+
+  const uid1 = generateFreeParticipantUid();
+  const uid2 = generateFreeParticipantUid();
+  assert.equal(isValidFirestoreId(uid1), true);
+  assert.equal(uid1.startsWith('fam_'), true);
+  assert.notEqual(uid1, uid2);
 });
 
 

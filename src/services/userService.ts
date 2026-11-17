@@ -18,10 +18,13 @@ import { DEFAULT_EVENT_ID } from '../utils/christmasLogic';
 
 export function subscribeToParticipants(
   onData: (users: UserProfile[]) => void,
-  onError: (err: Error) => void
+  onError: (err: Error) => void,
+  isAdminViewer = false
 ): Unsubscribe {
   const path = 'users';
-  const q = query(collection(db, 'users'), where('uid', '!=', ''));
+  const q = isAdminViewer
+    ? query(collection(db, 'users'))
+    : query(collection(db, 'users'), where('active', '==', true));
 
   return onSnapshot(
     q,
@@ -78,6 +81,21 @@ export async function updateOwnProfile(
         displayName: cleanName,
         ...(typeof updates.photoURL === 'string' && updates.photoURL ? { photoURL: updates.photoURL } : {}),
       });
+    } else if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem('navidad_juntos_free_session_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw) as { uid?: string; name?: string };
+          if (parsed.uid === uid) {
+            window.localStorage.setItem(
+              'navidad_juntos_free_session_v1',
+              JSON.stringify({ uid, name: cleanName })
+            );
+          }
+        }
+      } catch {
+        // Non-blocking
+      }
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);

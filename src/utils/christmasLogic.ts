@@ -334,4 +334,11 @@ export function detectInAppBrowser(userAgent: string): boolean {
   return /WhatsApp|FBAN|FBAV|Instagram|Line\/|BytedanceWebview|musical_ly|Snapchat|Twitter/i.test(userAgent);
 }
 
-
+export function generateFreeParticipantUid(): string {
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+    return `fam_${globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`;
+  }
+  const part1 = Math.random().toString(36).slice(2, 12);
+  const part2 = Date.now().toString(36);
+  return `fam_${part2}${part1}`.replace(/[^a-zA-Z0-9_-]/g, '');
+}

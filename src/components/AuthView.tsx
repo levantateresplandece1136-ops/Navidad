@@ -1,14 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, Sparkles, UserCheck } from 'lucide-react';
 import { loginFreeWithName, loginWithGoogle } from '../services/authService';
+import { getFriendlyFirebaseError } from '../services/firebase';
 import { detectInAppBrowser, FIELD_LIMITS, validateFreeAccessName } from '../utils/christmasLogic';
+
+import { UserProfile } from '../types/models';
 
 interface AuthViewProps {
   initialName?: string;
+  onFreeLogin: (profile: UserProfile) => void;
   onBackToWelcome: () => void;
 }
 
-export function AuthView({ initialName = '', onBackToWelcome }: AuthViewProps) {
+export function AuthView({ initialName = '', onFreeLogin, onBackToWelcome }: AuthViewProps) {
   const [name, setName] = useState(initialName);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -30,9 +34,10 @@ export function AuthView({ initialName = '', onBackToWelcome }: AuthViewProps) {
 
     setLoading(true);
     try {
-      await loginFreeWithName(validation.cleanName);
+      const profile = await loginFreeWithName(validation.cleanName);
+      onFreeLogin(profile);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'No pudimos iniciar tu acceso familiar.');
+      setErrorMsg(getFriendlyFirebaseError(err));
     } finally {
       setLoading(false);
     }
@@ -79,7 +84,7 @@ export function AuthView({ initialName = '', onBackToWelcome }: AuthViewProps) {
           {errorMsg && (
             <div
               role="alert"
-              className="rounded-xl bg-[#B83232]/10 border border-[#B83232]/25 p-3.5 text-xs font-medium text-[#942424] leading-relaxed"
+              className="rounded-xl bg-[#B83232]/10 border border-[#B83232]/25 p-3.5 text-xs font-medium text-[#942424] leading-relaxed break-words"
             >
               {errorMsg}
             </div>

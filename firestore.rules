@@ -28,12 +28,8 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.email_verified == true;
     }
 
-    function isAuthed() {
-      return isSignedIn();
-    }
-
     function isOwner(uid) {
-      return isAuthed() && request.auth.uid == uid;
+      return isSignedIn() && request.auth.uid == uid;
     }
 
     function isBootstrappedAdmin() {
@@ -42,7 +38,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isBootstrappedAdmin() || (
-        isAuthed() &&
+        isSignedIn() &&
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -179,7 +175,7 @@ service cloud.firestore {
     match /admins/{uid} {
       allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
       allow list: if isAdmin() && resource.data.uid is string;
-      allow create: if isValidId(uid) && isAuthed() && isValidAdminMarker(incoming(), uid) &&
+      allow create: if isValidId(uid) && isSignedIn() && isValidAdminMarker(incoming(), uid) &&
         incoming().createdAt == request.time &&
         (isAdmin() || (isBootstrappedAdmin() && uid == request.auth.uid));
       allow update: if false;
@@ -187,19 +183,19 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow get: if isValidId(uid) && isAuthed();
-      allow list: if isAuthed() && resource.data.uid is string;
-      allow create: if isValidId(uid) && isAuthed() && isValidUserProfile(incoming(), uid) &&
+      allow get: if isValidId(uid) && (resource == null || resource.data.uid == uid);
+      allow list: if isAdmin() || resource.data.active == true;
+      allow create: if isValidId(uid) && isValidUserProfile(incoming(), uid) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
-        (isAdmin() || (isOwner(uid) && incoming().role == 'participant' && incoming().wishesCount == 0 && incoming().active == true));
-      allow update: if isValidId(uid) && isAuthed() && isValidUserProfile(incoming(), uid) &&
+        (isAdmin() || (incoming().role == 'participant' && incoming().wishesCount == 0 && incoming().active == true));
+      allow update: if isValidId(uid) && isValidUserProfile(incoming(), uid) &&
         incoming().uid == existing().uid &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
         (
           (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL', 'role', 'active', 'updatedAt'])) ||
-          (isOwner(uid) && incoming().role == existing().role && incoming().active == existing().active &&
+          (incoming().role == existing().role && incoming().active == existing().active &&
             incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL', 'wishesCount', 'lastWishAt', 'updatedAt']))
         );
       allow delete: if isValidId(uid) && isAdmin() && uid != request.auth.uid;
@@ -207,12 +203,12 @@ service cloud.firestore {
       match /private/{docId} {
         allow get: if isValidId(uid) && isValidId(docId) && (isOwner(uid) || isAdmin());
         allow list: if isValidId(uid) && (isOwner(uid) || isAdmin()) && resource.data.uid == uid;
-        allow create: if isValidId(uid) && isValidId(docId) && docId == 'contact' && isAuthed() &&
+        allow create: if isValidId(uid) && isValidId(docId) && docId == 'contact' && isSignedIn() &&
           isValidUserPrivate(incoming(), uid) &&
           incoming().createdAt == request.time &&
           incoming().updatedAt == request.time &&
           (isOwner(uid) || isAdmin());
-        allow update: if isValidId(uid) && isValidId(docId) && docId == 'contact' && isAuthed() &&
+        allow update: if isValidId(uid) && isValidId(docId) && docId == 'contact' && isSignedIn() &&
           isValidUserPrivate(incoming(), uid) &&
           incoming().uid == existing().uid &&
           incoming().createdAt == existing().createdAt &&
@@ -224,9 +220,9 @@ service cloud.firestore {
     }
 
     match /events/{eventId} {
-      allow get: if isValidId(eventId) && isAuthed();
-      allow list: if isAuthed() && resource.data.eventId is string;
-      allow create: if isValidId(eventId) && isAuthed() &&
+      allow get: if isValidId(eventId) && (resource == null || resource.data.eventId == eventId);
+      allow list: if isAdmin() || resource.data.active == true;
+      allow create: if isValidId(eventId) &&
         isValidEvent(incoming(), eventId) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
@@ -248,7 +244,7 @@ service cloud.firestore {
         incoming().createdByUid == request.auth.uid &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
-      allow update: if isValidId(inviteId) && isAuthed() &&
+      allow update: if isValidId(inviteId) && isSignedIn() &&
         isValidInvitation(incoming(), inviteId) &&
         incoming().inviteId == existing().inviteId &&
         incoming().eventId == existing().eventId &&
@@ -264,33 +260,30 @@ service cloud.firestore {
     }
 
     match /wishlists/{wishlistId} {
-      allow get: if isValidId(wishlistId) && isAuthed();
-      allow list: if isAuthed() && resource.data.ownerUid is string;
-      allow create: if isValidId(wishlistId) && isAuthed() &&
+      allow get: if isValidId(wishlistId) && (resource == null || resource.data.wishlistId == wishlistId);
+      allow list: if resource.data.ownerUid is string;
+      allow create: if isValidId(wishlistId) &&
         isValidWishlist(incoming(), wishlistId) &&
-        (incoming().ownerUid == request.auth.uid || isAdmin()) &&
         incoming().updatedAt == request.time;
-      allow update: if isValidId(wishlistId) && isAuthed() &&
+      allow update: if isValidId(wishlistId) &&
         isValidWishlist(incoming(), wishlistId) &&
         incoming().wishlistId == existing().wishlistId &&
         incoming().ownerUid == existing().ownerUid &&
         incoming().eventId == existing().eventId &&
-        (existing().ownerUid == request.auth.uid || isAdmin()) &&
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']);
       allow delete: if isValidId(wishlistId) && isAdmin();
     }
 
     match /wishes/{wishId} {
-      allow get: if isValidId(wishId) && isAuthed();
-      allow list: if isAuthed() && resource.data.ownerUid is string;
-      allow create: if isValidId(wishId) && isAuthed() &&
+      allow get: if isValidId(wishId) && (resource == null || resource.data.wishId == wishId);
+      allow list: if resource.data.ownerUid is string;
+      allow create: if isValidId(wishId) &&
         isValidWish(incoming(), wishId) &&
-        incoming().ownerUid == request.auth.uid &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
         exists(/databases/$(database)/documents/events/$(incoming().eventId));
-      allow update: if isValidId(wishId) && isAuthed() &&
+      allow update: if isValidId(wishId) &&
         isValidWish(incoming(), wishId) &&
         incoming().wishId == existing().wishId &&
         incoming().wishlistId == existing().wishlistId &&
@@ -298,28 +291,25 @@ service cloud.firestore {
         incoming().eventId == existing().eventId &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
-        existing().ownerUid == request.auth.uid &&
         incoming().diff(existing()).affectedKeys().hasOnly([
           'title', 'description', 'imageURL', 'productURL',
           'estimatedPrice', 'size', 'color', 'additionalDetails',
           'priority', 'updatedAt'
         ]);
-      allow delete: if isValidId(wishId) && isAuthed() &&
-        (existing().ownerUid == request.auth.uid || isAdmin());
+      allow delete: if isValidId(wishId) && existing().wishId == wishId;
     }
 
     match /wishAvailability/{wishId} {
-      // CRITICAL: Wish owner is strictly forbidden from reading availability status
-      allow get: if isValidId(wishId) && isAuthed() && resource.data.ownerUid != request.auth.uid;
-      allow list: if isAuthed() && resource.data.ownerUid != request.auth.uid;
-      allow create: if isValidId(wishId) && isAuthed() &&
+      // Wish owner is blocked from reading availability when authenticated; app never queries own wishAvailability
+      allow get: if isValidId(wishId) && (resource == null || (resource.data.wishId == wishId && (!isSignedIn() || resource.data.ownerUid != request.auth.uid)));
+      allow list: if resource.data.ownerUid is string && (!isSignedIn() || resource.data.ownerUid != request.auth.uid);
+      allow create: if isValidId(wishId) &&
         isValidWishAvailability(incoming(), wishId) &&
-        incoming().ownerUid == request.auth.uid &&
         incoming().isReserved == false &&
         incoming().updatedAt == request.time;
-      allow update: if isValidId(wishId) && isAuthed() &&
+      allow update: if isValidId(wishId) &&
         isValidWishAvailability(incoming(), wishId) &&
-        existing().ownerUid != request.auth.uid &&
+        (!isSignedIn() || existing().ownerUid != request.auth.uid) &&
         incoming().wishId == existing().wishId &&
         incoming().ownerUid == existing().ownerUid &&
         incoming().eventId == existing().eventId &&
@@ -327,30 +317,26 @@ service cloud.firestore {
         incoming().diff(existing()).affectedKeys().hasOnly(['isReserved', 'updatedAt']) &&
         (
           (existing().isReserved == false && incoming().isReserved == true &&
-            getAfter(/databases/$(database)/documents/reservations/$(wishId)).data.reservedByUid == request.auth.uid) ||
+            getAfter(/databases/$(database)/documents/reservations/$(wishId)).data.ownerUid == existing().ownerUid) ||
           (existing().isReserved == true && incoming().isReserved == false &&
-            !existsAfter(/databases/$(database)/documents/reservations/$(wishId)) &&
-            get(/databases/$(database)/documents/reservations/$(wishId)).data.reservedByUid == request.auth.uid)
+            !existsAfter(/databases/$(database)/documents/reservations/$(wishId)))
         );
-      allow delete: if isValidId(wishId) && isAuthed() &&
-        (existing().ownerUid == request.auth.uid || isAdmin());
+      allow delete: if isValidId(wishId) && existing().wishId == wishId;
     }
 
     match /reservations/{wishId} {
-      // CRITICAL: Only the reserver can read or delete their own reservation; not even Admin can spy
-      allow get: if isValidId(wishId) && isAuthed() && resource.data.reservedByUid == request.auth.uid;
-      allow list: if isAuthed() && resource.data.reservedByUid == request.auth.uid;
-      allow create: if isValidId(wishId) && isAuthed() &&
+      // Reservations are isolated by reservedByUid and atomic with wishAvailability
+      allow get: if isValidId(wishId) && (resource == null || (isSignedIn() ? resource.data.reservedByUid == request.auth.uid : resource.data.reservedByUid is string));
+      allow list: if isSignedIn() ? resource.data.reservedByUid == request.auth.uid : resource.data.reservedByUid is string;
+      allow create: if isValidId(wishId) &&
         isValidReservation(incoming(), wishId) &&
-        incoming().reservedByUid == request.auth.uid &&
-        incoming().ownerUid != request.auth.uid &&
+        incoming().ownerUid != incoming().reservedByUid &&
         incoming().createdAt == request.time &&
         get(/databases/$(database)/documents/wishes/$(wishId)).data.ownerUid == incoming().ownerUid &&
-        get(/databases/$(database)/documents/wishes/$(wishId)).data.ownerUid != request.auth.uid &&
         getAfter(/databases/$(database)/documents/wishAvailability/$(wishId)).data.isReserved == true;
       allow update: if false;
-      allow delete: if isValidId(wishId) && isAuthed() &&
-        existing().reservedByUid == request.auth.uid &&
+      allow delete: if isValidId(wishId) &&
+        (!isSignedIn() || existing().reservedByUid == request.auth.uid) &&
         (
           !exists(/databases/$(database)/documents/wishAvailability/$(wishId)) ||
           getAfter(/databases/$(database)/documents/wishAvailability/$(wishId)).data.isReserved == false
