@@ -198,7 +198,11 @@ service cloud.firestore {
           (incoming().role == existing().role && incoming().active == existing().active &&
             incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL', 'wishesCount', 'lastWishAt', 'updatedAt']))
         );
-      allow delete: if isValidId(uid) && isAdmin() && uid != request.auth.uid;
+      allow delete: if isValidId(uid) && (
+        (isAdmin() && uid != request.auth.uid) ||
+        isOwner(uid) ||
+        (!isSignedIn() && uid.matches('^fam_[a-zA-Z0-9_\\-]+$') && existing().role == 'participant')
+      );
 
       match /private/{docId} {
         allow get: if isValidId(uid) && isValidId(docId) && (isOwner(uid) || isAdmin());
@@ -215,7 +219,7 @@ service cloud.firestore {
           incoming().updatedAt == request.time &&
           (isOwner(uid) || isAdmin()) &&
           incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
-        allow delete: if isValidId(uid) && isValidId(docId) && isAdmin();
+        allow delete: if isValidId(uid) && isValidId(docId) && (isOwner(uid) || isAdmin());
       }
     }
 
@@ -272,7 +276,11 @@ service cloud.firestore {
         incoming().eventId == existing().eventId &&
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']);
-      allow delete: if isValidId(wishlistId) && isAdmin();
+      allow delete: if isValidId(wishlistId) && (
+        isAdmin() ||
+        isOwner(wishlistId) ||
+        (!isSignedIn() && wishlistId.matches('^fam_[a-zA-Z0-9_\\-]+$'))
+      );
     }
 
     match /wishes/{wishId} {

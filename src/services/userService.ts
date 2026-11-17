@@ -15,6 +15,8 @@ import {
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { auth, db, handleFirestoreError, timestampToDate } from './firebase';
+import { logoutUser } from './authService';
+import { deleteStorageImageByUrl } from './storageService';
 import { Invitation, InvitationStatus, OperationType, UserProfile, UserRole } from '../types/models';
 import { DEFAULT_EVENT_ID } from '../utils/christmasLogic';
 
@@ -180,6 +182,76 @@ export async function adminRemoveMultipleParticipants(targetUids: string[]): Pro
     removed += 1;
   }
   return removed;
+}
+
+export async function deleteOwnProfile(uid: string): Promise<void> {
+  const path = `users/${uid}`;
+  const imageUrls: string[] = [];
+
+  try {
+    const [wishesSnap, reservationsSnap, wishlistSnap] = await Promise.all([
+      getDocs(query(collection(db, 'wishes'), where('ownerUid', '==', uid))),
+      getDocs(query(collection(db, 'reservations'), where('reservedByUid', '==', uid))),
+      getDoc(doc(db, 'wishlists', uid)),
+    ]);
+
+    const [ownAvailSnaps, reservedAvailSnaps] = await Promise.all([
+      Promise.all(wishesSnap.docs.map((w) => getDoc(doc(db, 'wishAvailability', w.id)))),
+      Promise.all(reservationsSnap.docs.map((r) => getDoc(doc(db, 'wishAvailability', r.id)))),
+    ]);
+
+    let privateContactExists = false;
+    if (auth.currentUser?.uid === uid) {
+      try {
+        const contactSnap = await getDoc(doc(db, 'users', uid, 'private', 'contact'));
+        privateContactExists = contactSnap.exists();
+      } catch {
+        privateContactExists = false;
+      }
+    }
+
+    const batch = writeBatch(db);
+
+    wishesSnap.docs.forEach((wishDoc, idx) => {
+      const url = wishDoc.data()?.imageURL;
+      if (typeof url === 'string' && url) imageUrls.push(url);
+      batch.delete(wishDoc.ref);
+      if (ownAvailSnaps[idx]?.exists()) {
+        batch.delete(ownAvailSnaps[idx].ref);
+      }
+    });
+
+    reservationsSnap.docs.forEach((resDoc, idx) => {
+      batch.delete(resDoc.ref);
+      const availSnap = reservedAvailSnaps[idx];
+      if (availSnap?.exists() && availSnap.data()?.isReserved === true) {
+        batch.update(availSnap.ref, {
+          isReserved: false,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+
+    if (wishlistSnap.exists()) {
+      batch.delete(wishlistSnap.ref);
+    }
+
+    if (privateContactExists) {
+      batch.delete(doc(db, 'users', uid, 'private', 'contact'));
+    }
+
+    batch.delete(doc(db, 'users', uid));
+
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+
+  for (const url of imageUrls) {
+    await deleteStorageImageByUrl(url);
+  }
+
+  await logoutUser();
 }
 
 export function subscribeToInvitations(

@@ -288,6 +288,12 @@ export default function App() {
             userEmail={firebaseUser?.email || ''}
             isAnonymous={!firebaseUser}
             onOpenAdmin={() => handleNavigate('admin')}
+            onSignedOut={() => {
+              setCurrentUser(null);
+              setSelectedWishlistUid(null);
+              setActiveView('dashboard');
+              setShowAuthScreen(true);
+            }}
             onNotify={notify}
           />
         )}

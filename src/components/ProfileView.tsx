@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, LogOut, Save, ShieldCheck } from 'lucide-react';
+import { Camera, LogOut, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { UserProfile, UserRole } from '../types/models';
 import { FIELD_LIMITS, validateFreeAccessName } from '../utils/christmasLogic';
 import { uploadAvatarImage } from '../services/storageService';
-import { updateOwnProfile } from '../services/userService';
+import { deleteOwnProfile, updateOwnProfile } from '../services/userService';
 import { logoutUser } from '../services/authService';
 import { getFriendlyFirebaseError } from '../services/firebase';
 import { AvatarCircle } from './FestiveIllustrations';
@@ -14,6 +14,7 @@ interface ProfileViewProps {
   userEmail: string;
   isAnonymous: boolean;
   onOpenAdmin: () => void;
+  onSignedOut: () => void;
   onNotify: (type: 'success' | 'error', message: string) => void;
 }
 
@@ -22,6 +23,7 @@ export function ProfileView({
   userEmail,
   isAnonymous,
   onOpenAdmin,
+  onSignedOut,
   onNotify,
 }: ProfileViewProps) {
   const [name, setName] = useState(currentUser.name);
@@ -29,6 +31,8 @@ export function ProfileView({
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deletingProfile, setDeletingProfile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -72,11 +76,30 @@ export function ProfileView({
     }
   };
 
+  const handlePerformLogout = async () => {
+    await logoutUser();
+    onSignedOut();
+  };
+
   const handleLogoutClick = () => {
     if (isAnonymous) {
       setConfirmLogoutOpen(true);
     } else {
-      void logoutUser();
+      void handlePerformLogout();
+    }
+  };
+
+  const handleConfirmDeleteOwnProfile = async () => {
+    setDeletingProfile(true);
+    try {
+      await deleteOwnProfile(currentUser.uid);
+      setConfirmDeleteOpen(false);
+      onNotify('success', 'Tu perfil fue eliminado correctamente.');
+      onSignedOut();
+    } catch (err) {
+      onNotify('error', getFriendlyFirebaseError(err));
+    } finally {
+      setDeletingProfile(false);
     }
   };
 
@@ -175,17 +198,46 @@ export function ProfileView({
         </section>
       )}
 
+      <section className="rounded-3xl bg-white border border-[#B83232]/20 shadow-xs p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="font-display text-xl font-semibold text-[#174C38]">¿Te equivocaste al entrar?</h2>
+          <p className="text-sm text-[#174C38]/75">
+            Puedes eliminar este perfil junto con tus deseos publicados y reservaciones para empezar de nuevo con el
+            nombre correcto.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setConfirmDeleteOpen(true)}
+          className="min-h-[44px] px-4 py-2.5 rounded-xl border border-[#B83232]/30 text-sm font-semibold text-[#B83232] hover:bg-[#B83232] hover:text-white inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span>Eliminar mi perfil</span>
+        </button>
+      </section>
+
       <ConfirmModal
         open={confirmLogoutOpen}
         title="¿Salir de tu sesión?"
-        message="Como entraste en modo acceso libre, tu lista está guardada en este navegador. Si cierras sesión y vuelves a entrar, se abrirá un perfil nuevo."
+        message="Tu lista seguirá guardada y podrás reconectarte cuando vuelvas a escribir tu nombre."
         confirmLabel="Sí, salir"
         variant="danger"
         onConfirm={() => {
           setConfirmLogoutOpen(false);
-          void logoutUser();
+          void handlePerformLogout();
         }}
         onCancel={() => setConfirmLogoutOpen(false)}
+      />
+
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        title="Eliminar mi propio perfil"
+        message={`¿Seguro que deseas eliminar permanentemente tu perfil "${currentUser.name}" y todos tus deseos publicados? Esta acción no se puede deshacer.`}
+        confirmLabel="Sí, eliminar mi perfil"
+        variant="danger"
+        loading={deletingProfile}
+        onConfirm={handleConfirmDeleteOwnProfile}
+        onCancel={() => setConfirmDeleteOpen(false)}
       />
     </div>
   );
