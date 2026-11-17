@@ -6,8 +6,8 @@ import { auth, getFriendlyFirebaseError } from './services/firebase';
 import {
   consumeGoogleRedirectResult,
   getSavedFreeSession,
+  restoreFreeParticipantSession,
   syncAuthenticatedUserProfile,
-  syncFreeParticipantProfile,
 } from './services/authService';
 import { subscribeToActiveEvent } from './services/eventService';
 import { subscribeToParticipants } from './services/userService';
@@ -98,7 +98,7 @@ export default function App() {
       const freeSession = getSavedFreeSession();
       if (freeSession) {
         try {
-          const profile = await syncFreeParticipantProfile(freeSession.uid, freeSession.name);
+          const profile = await restoreFreeParticipantSession(freeSession.uid);
           setCurrentUser(profile);
         } catch (err) {
           notify('error', getFriendlyFirebaseError(err));

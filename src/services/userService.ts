@@ -2,6 +2,8 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -146,10 +148,38 @@ export async function adminUpdateParticipant(params: {
 export async function adminRemoveParticipant(targetUid: string): Promise<void> {
   const path = `users/${targetUid}`;
   try {
-    await deleteDoc(doc(db, 'users', targetUid));
+    const wishesSnap = await getDocs(query(collection(db, 'wishes'), where('ownerUid', '==', targetUid)));
+    const availSnaps = await Promise.all(
+      wishesSnap.docs.map((wishDoc) => getDoc(doc(db, 'wishAvailability', wishDoc.id)))
+    );
+    const batch = writeBatch(db);
+
+    wishesSnap.docs.forEach((wishDoc, idx) => {
+      batch.delete(wishDoc.ref);
+      if (availSnaps[idx]?.exists()) {
+        batch.delete(availSnaps[idx].ref);
+      }
+    });
+
+    batch.delete(doc(db, 'wishlists', targetUid));
+    if (auth.currentUser?.uid && targetUid !== auth.currentUser.uid) {
+      batch.delete(doc(db, 'admins', targetUid));
+    }
+    batch.delete(doc(db, 'users', targetUid));
+
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
+}
+
+export async function adminRemoveMultipleParticipants(targetUids: string[]): Promise<number> {
+  let removed = 0;
+  for (const uid of targetUids) {
+    await adminRemoveParticipant(uid);
+    removed += 1;
+  }
+  return removed;
 }
 
 export function subscribeToInvitations(

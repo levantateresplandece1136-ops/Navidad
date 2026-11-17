@@ -17,6 +17,7 @@ import { DEFAULT_EVENT_ID, DEFAULT_EXCHANGE_DATE } from '../utils/christmasLogic
 import { saveEventConfiguration } from '../services/eventService';
 import {
   adminCreateInvitation,
+  adminRemoveMultipleParticipants,
   adminRemoveParticipant,
   adminRevokeInvitation,
   adminUpdateParticipant,
@@ -60,6 +61,10 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
   // Delete participant confirmation
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
+
+  // Bulk clear other participants confirmation
+  const [confirmClearOthers, setConfirmClearOthers] = useState(false);
+  const [clearingOthers, setClearingOthers] = useState(false);
 
   useEffect(() => {
     if (activeEvent) {
@@ -198,12 +203,31 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
     setDeletingUser(true);
     try {
       await adminRemoveParticipant(userToDelete.uid);
-      onNotify('success', `${userToDelete.name} fue dado de baja del evento.`);
+      onNotify('success', `${userToDelete.name} fue eliminado del evento.`);
       setUserToDelete(null);
     } catch (err) {
       onNotify('error', getFriendlyFirebaseError(err));
     } finally {
       setDeletingUser(false);
+    }
+  };
+
+  const otherParticipants = participants.filter((p) => p.uid !== currentUser.uid);
+
+  const handleConfirmClearOtherParticipants = async () => {
+    if (otherParticipants.length === 0) {
+      setConfirmClearOthers(false);
+      return;
+    }
+    setClearingOthers(true);
+    try {
+      const removed = await adminRemoveMultipleParticipants(otherParticipants.map((p) => p.uid));
+      onNotify('success', `Se eliminaron ${removed} perfiles de participantes correctamente.`);
+      setConfirmClearOthers(false);
+    } catch (err) {
+      onNotify('error', getFriendlyFirebaseError(err));
+    } finally {
+      setClearingOthers(false);
     }
   };
 
@@ -424,13 +448,24 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
 
       {/* Registered Participants */}
       <section className="rounded-3xl bg-white border border-[#174C38]/10 shadow-xs p-6 space-y-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <Users className="w-5 h-5 text-[#B83232]" />
             <h2 className="font-display text-xl font-semibold text-[#174C38]">
               Participantes registrados ({participants.length})
             </h2>
           </div>
+
+          {otherParticipants.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setConfirmClearOthers(true)}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-[#B83232]/25 text-xs font-semibold text-[#B83232] hover:bg-[#B83232] hover:text-white inline-flex items-center gap-1.5 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Limpiar otros perfiles ({otherParticipants.length})</span>
+            </button>
+          )}
         </div>
 
         <div className="divide-y divide-[#174C38]/10">
@@ -467,7 +502,7 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
                       className="min-h-[40px] px-3.5 py-2 rounded-xl border border-[#B83232]/25 text-xs font-semibold text-[#B83232] hover:bg-[#B83232] hover:text-white inline-flex items-center gap-1.5 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Dar de baja</span>
+                      <span>Eliminar</span>
                     </button>
                   )}
                 </div>
@@ -570,17 +605,28 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
 
       <ConfirmModal
         open={Boolean(userToDelete)}
-        title="Dar de baja participante"
+        title="Eliminar participante"
         message={
           userToDelete
-            ? `¿Seguro que deseas dar de baja a ${userToDelete.name}? Ya no aparecerá en el directorio familiar.`
+            ? `¿Seguro que deseas eliminar a ${userToDelete.name} y sus deseos publicados? Ya no aparecerá en el directorio familiar.`
             : ''
         }
-        confirmLabel="Sí, dar de baja"
+        confirmLabel="Sí, eliminar"
         variant="danger"
         loading={deletingUser}
         onConfirm={handleConfirmDeleteUser}
         onCancel={() => setUserToDelete(null)}
+      />
+
+      <ConfirmModal
+        open={confirmClearOthers}
+        title="Limpiar otros perfiles"
+        message={`¿Seguro que deseas eliminar los ${otherParticipants.length} perfiles de otros participantes y sus deseos publicados? Tu perfil de administrador se conservará intacto.`}
+        confirmLabel="Sí, limpiar perfiles"
+        variant="danger"
+        loading={clearingOthers}
+        onConfirm={handleConfirmClearOtherParticipants}
+        onCancel={() => setConfirmClearOthers(false)}
       />
     </div>
   );

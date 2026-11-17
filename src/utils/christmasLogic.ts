@@ -342,3 +342,28 @@ export function generateFreeParticipantUid(): string {
   const part2 = Date.now().toString(36);
   return `fam_${part2}${part1}`.replace(/[^a-zA-Z0-9_-]/g, '');
 }
+
+export function normalizeParticipantName(rawName: string): string {
+  return (rawName || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+export function findMatchingFreeParticipant<
+  T extends Pick<UserProfile, 'uid' | 'name' | 'role' | 'active'>
+>(participants: T[], rawName: string): T | null {
+  const target = normalizeParticipantName(rawName);
+  if (!target) return null;
+  return (
+    participants.find(
+      (p) =>
+        p.active !== false &&
+        p.uid.startsWith('fam_') &&
+        p.role === 'participant' &&
+        normalizeParticipantName(p.name) === target
+    ) || null
+  );
+}

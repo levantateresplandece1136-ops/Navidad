@@ -5,8 +5,10 @@ import {
   canUserReserveWish,
   detectInAppBrowser,
   filterParticipants,
+  findMatchingFreeParticipant,
   generateFreeParticipantUid,
   isValidFirestoreId,
+  normalizeParticipantName,
   sanitizeExternalUrl,
   shouldExposeAvailabilityToViewer,
   sortWishesByPriorityAndDate,
@@ -174,6 +176,20 @@ test('validateFreeAccessName and detectInAppBrowser validate free name entry and
   assert.equal(isValidFirestoreId(uid1), true);
   assert.equal(uid1.startsWith('fam_'), true);
   assert.notEqual(uid1, uid2);
+});
+
+test('findMatchingFreeParticipant reconnects matching fam_ profiles without touching admin or inactive users', () => {
+  assert.equal(normalizeParticipantName('  Tía   Lupita '), 'tia lupita');
+
+  const pool = [
+    { uid: 'google_admin_1', name: 'Josue Cortes', role: UserRole.ADMIN, active: true },
+    { uid: 'fam_inactive', name: 'Ammi', role: UserRole.PARTICIPANT, active: false },
+    { uid: 'fam_active_ammi', name: 'Ammi Prueba', role: UserRole.PARTICIPANT, active: true },
+  ];
+
+  assert.equal(findMatchingFreeParticipant(pool, 'ammi   prueba')?.uid, 'fam_active_ammi');
+  assert.equal(findMatchingFreeParticipant(pool, 'Josue Cortes'), null);
+  assert.equal(findMatchingFreeParticipant(pool, 'Ammi'), null);
 });
 
 

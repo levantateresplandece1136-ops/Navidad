@@ -22,6 +22,7 @@ import {
   BOOTSTRAPPED_ADMIN_EMAIL,
   DEFAULT_EVENT_ID,
   DEFAULT_EXCHANGE_DATE,
+  findMatchingFreeParticipant,
   generateFreeParticipantUid,
   validateFreeAccessName,
 } from '../utils/christmasLogic';
@@ -154,6 +155,8 @@ function mapDocToUserProfile(data: Record<string, any>): UserProfile {
 /**
  * Acceso libre inmediato sin correo, sin contraseña, sin WhatsApp
  * y sin requerir proveedores adicionales en Firebase Console.
+ * Si el familiar ya tiene un perfil libre con el mismo nombre, se reconecta
+ * en lugar de duplicar su tarjeta.
  */
 export async function loginFreeWithName(name: string): Promise<UserProfile> {
   const validation = validateFreeAccessName(name);
@@ -161,12 +164,69 @@ export async function loginFreeWithName(name: string): Promise<UserProfile> {
     throw new Error(validation.error || 'Escribe tu nombre para continuar.');
   }
 
+  let uid: string | null = null;
   const existingSession = getSavedFreeSession();
-  const uid = existingSession?.uid || generateFreeParticipantUid();
 
-  const profile = await syncFreeParticipantProfile(uid, validation.cleanName);
+  if (existingSession?.uid) {
+    try {
+      const savedSnap = await getDoc(doc(db, 'users', existingSession.uid));
+      if (savedSnap.exists() && savedSnap.data()?.active !== false) {
+        uid = existingSession.uid;
+      } else {
+        clearFreeSession();
+      }
+    } catch {
+      // Fall back to lookup/create
+    }
+  }
+
+  if (!uid) {
+    try {
+      const snap = await getDocs(query(collection(db, 'users'), where('active', '==', true)));
+      const candidates = snap.docs.map((docSnap) => {
+        const d = docSnap.data();
+        return {
+          uid: (d.uid as string) || docSnap.id,
+          name: (d.name as string) || '',
+          role: d.role === UserRole.ADMIN ? UserRole.ADMIN : UserRole.PARTICIPANT,
+          active: d.active !== false,
+        };
+      });
+      const matched = findMatchingFreeParticipant(candidates, validation.cleanName);
+      if (matched) {
+        uid = matched.uid;
+      }
+    } catch {
+      // Non-fatal: create a fresh participant UID below
+    }
+  }
+
+  const resolvedUid = uid || generateFreeParticipantUid();
+  const profile = await syncFreeParticipantProfile(resolvedUid, validation.cleanName);
   saveFreeSession({ uid: profile.uid, name: profile.name });
   return profile;
+}
+
+/**
+ * Restaura una sesión libre guardada en localStorage solo si el perfil
+ * todavía existe y está activo en Firestore.
+ */
+export async function restoreFreeParticipantSession(uid: string): Promise<UserProfile | null> {
+  const userRef = doc(db, 'users', uid);
+  let userSnap;
+  try {
+    userSnap = await getDoc(userRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `users/${uid}`);
+  }
+
+  if (!userSnap.exists() || userSnap.data()?.active === false) {
+    clearFreeSession();
+    return null;
+  }
+
+  await ensureDefaultEventExists();
+  return mapDocToUserProfile(userSnap.data()!);
 }
 
 export async function syncFreeParticipantProfile(uid: string, name?: string): Promise<UserProfile> {
