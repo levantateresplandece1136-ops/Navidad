@@ -1,0 +1,33 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isAuthed() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidImageUpload() {
+      return request.resource != null &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/(jpeg|jpg|png|webp|gif)');
+    }
+
+    // Profile avatars: readable by any signed-in family member, writable only by the owner
+    match /avatars/{uid}/{fileName} {
+      allow read: if isAuthed();
+      allow write: if isAuthed() && request.auth.uid == uid && isValidImageUpload();
+      allow delete: if isAuthed() && request.auth.uid == uid;
+    }
+
+    // Wish gift photos: readable by any signed-in family member, writable only by the wish owner
+    match /wishes/{uid}/{fileName} {
+      allow read: if isAuthed();
+      allow write: if isAuthed() && request.auth.uid == uid && isValidImageUpload();
+      allow delete: if isAuthed() && request.auth.uid == uid;
+    }
+  }
+}

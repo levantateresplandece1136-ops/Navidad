@@ -1,0 +1,8 @@
+{
+  "name": "NAVIDAD JUNTOS 2026",
+  "description": "Una Navidad, muchos deseos y una familia. Aplicación familiar para compartir listas de deseos y organizar regalos secretos en tiempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

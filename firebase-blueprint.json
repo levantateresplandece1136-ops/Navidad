@@ -1,0 +1,447 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public family participant profile visible to authenticated family members.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "participant"]
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "wishesCount": {
+          "type": "number"
+        },
+        "lastWishAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "name", "role", "active", "wishesCount", "createdAt", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private PII record containing user email address, restricted to owner and admin.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "AdminMarker": {
+      "title": "AdminMarker",
+      "description": "Trusted role document granting administrator privileges.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "grantedBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "ChristmasEvent": {
+      "title": "ChristmasEvent",
+      "description": "Christmas family exchange event configuration.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "year": {
+          "type": "number"
+        },
+        "exchangeDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 32
+        },
+        "inviteCodeHash": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["eventId", "name", "year", "exchangeDate", "active", "createdAt", "updatedAt"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Family member invitation created by an administrator.",
+      "type": "object",
+      "properties": {
+        "inviteId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "participant"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "revoked"]
+        },
+        "createdByUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["inviteId", "eventId", "name", "email", "role", "status", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "Wishlist": {
+      "title": "Wishlist",
+      "description": "Metadata document for a participant's wishlist in an event.",
+      "type": "object",
+      "properties": {
+        "wishlistId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["wishlistId", "ownerUid", "eventId", "updatedAt"]
+    },
+    "Wish": {
+      "title": "Wish",
+      "description": "Public gift wish belonging to a participant. Contains zero reservation data.",
+      "type": "object",
+      "properties": {
+        "wishId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "wishlistId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "imageURL": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "productURL": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "estimatedPrice": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "size": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "additionalDetails": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["me_encantaria", "me_gustaria", "es_opcional"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "wishId",
+        "wishlistId",
+        "ownerUid",
+        "eventId",
+        "title",
+        "description",
+        "priority",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "WishAvailability": {
+      "title": "WishAvailability",
+      "description": "Publicly readable (except by wish owner) availability status without reserver identity.",
+      "type": "object",
+      "properties": {
+        "wishId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "isReserved": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["wishId", "ownerUid", "eventId", "isReserved", "updatedAt"]
+    },
+    "Reservation": {
+      "title": "Reservation",
+      "description": "Strictly private secret gift reservation document readable ONLY by the reserver.",
+      "type": "object",
+      "properties": {
+        "wishId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reservedByUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "recipientName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "wishTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "wishDescription": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "wishImageURL": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "productURL": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "wishId",
+        "eventId",
+        "ownerUid",
+        "reservedByUid",
+        "recipientName",
+        "wishTitle",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public family participant profile (no email PII)."
+    },
+    "/users/{uid}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Private PII record containing user email address."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminMarker" },
+      "description": "Trusted administrator marker collection."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/ChristmasEvent" },
+      "description": "Christmas event configuration and exchange date."
+    },
+    "/invitations/{inviteId}": {
+      "schema": { "$ref": "#/entities/Invitation" },
+      "description": "Admin-managed family participant invitations."
+    },
+    "/wishlists/{wishlistId}": {
+      "schema": { "$ref": "#/entities/Wishlist" },
+      "description": "Participant wishlist metadata."
+    },
+    "/wishes/{wishId}": {
+      "schema": { "$ref": "#/entities/Wish" },
+      "description": "Participant wish items (contains zero reservation fields)."
+    },
+    "/wishAvailability/{wishId}": {
+      "schema": { "$ref": "#/entities/WishAvailability" },
+      "description": "Wish availability status without reserver identity; denied to wish owner."
+    },
+    "/reservations/{wishId}": {
+      "schema": { "$ref": "#/entities/Reservation" },
+      "description": "Secret reservation document keyed by wishId, readable only by reservedByUid."
+    }
+  }
+}

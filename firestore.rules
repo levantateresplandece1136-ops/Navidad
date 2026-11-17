@@ -1,0 +1,359 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isAuthed() {
+      return isSignedIn() && isEmailVerified();
+    }
+
+    function isOwner(uid) {
+      return isAuthed() && request.auth.uid == uid;
+    }
+
+    function isBootstrappedAdmin() {
+      return isAuthed() && request.auth.token.email == 'levantate.resplandece.11.36@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isAuthed() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    // 3. Entity Validation Blueprints (Aligned with firebase-blueprint.json)
+
+    function isValidAdminMarker(data, uid) {
+      return data.keys().hasAll(['uid', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'grantedBy', 'createdAt']) &&
+        data.uid == uid &&
+        isValidId(data.uid) &&
+        isOptionalString(data, 'grantedBy', 128) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidUserProfile(data, uid) {
+      return data.keys().hasAll(['uid', 'name', 'role', 'active', 'wishesCount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'name', 'photoURL', 'role', 'active', 'wishesCount', 'lastWishAt', 'createdAt', 'updatedAt']) &&
+        data.uid == uid &&
+        isValidId(data.uid) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        isOptionalString(data, 'photoURL', 1024) &&
+        data.role in ['admin', 'participant'] &&
+        data.active is bool &&
+        data.wishesCount is int && data.wishesCount >= 0 && data.wishesCount <= 1000 &&
+        (!('lastWishAt' in data) || data.lastWishAt is timestamp) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivate(data, uid) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        data.uid == uid &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidEvent(data, eventId) {
+      return data.keys().hasAll(['eventId', 'name', 'year', 'exchangeDate', 'active', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['eventId', 'name', 'year', 'exchangeDate', 'inviteCodeHash', 'active', 'createdAt', 'updatedAt']) &&
+        data.eventId == eventId &&
+        isValidId(data.eventId) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+        data.year is int && data.year >= 2024 && data.year <= 2100 &&
+        data.exchangeDate is string && data.exchangeDate.size() >= 10 && data.exchangeDate.size() <= 32 &&
+        isOptionalString(data, 'inviteCodeHash', 128) &&
+        data.active is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidInvitation(data, inviteId) {
+      return data.keys().hasAll(['inviteId', 'eventId', 'name', 'email', 'role', 'status', 'createdByUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['inviteId', 'eventId', 'name', 'email', 'role', 'status', 'createdByUid', 'createdAt', 'updatedAt']) &&
+        data.inviteId == inviteId &&
+        isValidId(data.inviteId) &&
+        isValidId(data.eventId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        data.role in ['admin', 'participant'] &&
+        data.status in ['pending', 'accepted', 'revoked'] &&
+        isValidId(data.createdByUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWishlist(data, wishlistId) {
+      return data.keys().hasAll(['wishlistId', 'ownerUid', 'eventId', 'updatedAt']) &&
+        data.keys().hasOnly(['wishlistId', 'ownerUid', 'eventId', 'updatedAt']) &&
+        data.wishlistId == wishlistId &&
+        isValidId(data.wishlistId) &&
+        isValidId(data.ownerUid) &&
+        isValidId(data.eventId) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWish(data, wishId) {
+      return data.keys().hasAll(['wishId', 'wishlistId', 'ownerUid', 'eventId', 'title', 'description', 'priority', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['wishId', 'wishlistId', 'ownerUid', 'eventId', 'title', 'description', 'imageURL', 'productURL', 'estimatedPrice', 'size', 'color', 'additionalDetails', 'priority', 'createdAt', 'updatedAt']) &&
+        data.wishId == wishId &&
+        isValidId(data.wishId) &&
+        isValidId(data.wishlistId) &&
+        isValidId(data.ownerUid) &&
+        isValidId(data.eventId) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 1000 &&
+        isOptionalString(data, 'imageURL', 1024) &&
+        isOptionalString(data, 'productURL', 1024) &&
+        isOptionalString(data, 'estimatedPrice', 40) &&
+        isOptionalString(data, 'size', 40) &&
+        isOptionalString(data, 'color', 50) &&
+        isOptionalString(data, 'additionalDetails', 600) &&
+        data.priority in ['me_encantaria', 'me_gustaria', 'es_opcional'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWishAvailability(data, wishId) {
+      return data.keys().hasAll(['wishId', 'ownerUid', 'eventId', 'isReserved', 'updatedAt']) &&
+        data.keys().hasOnly(['wishId', 'ownerUid', 'eventId', 'isReserved', 'updatedAt']) &&
+        data.wishId == wishId &&
+        isValidId(data.wishId) &&
+        isValidId(data.ownerUid) &&
+        isValidId(data.eventId) &&
+        data.isReserved is bool &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidReservation(data, wishId) {
+      return data.keys().hasAll(['wishId', 'eventId', 'ownerUid', 'reservedByUid', 'recipientName', 'wishTitle', 'createdAt']) &&
+        data.keys().hasOnly(['wishId', 'eventId', 'ownerUid', 'reservedByUid', 'recipientName', 'wishTitle', 'wishDescription', 'wishImageURL', 'productURL', 'createdAt']) &&
+        data.wishId == wishId &&
+        isValidId(data.wishId) &&
+        isValidId(data.eventId) &&
+        isValidId(data.ownerUid) &&
+        isValidId(data.reservedByUid) &&
+        data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 100 &&
+        data.wishTitle is string && data.wishTitle.size() >= 1 && data.wishTitle.size() <= 140 &&
+        isOptionalString(data, 'wishDescription', 1000) &&
+        isOptionalString(data, 'wishImageURL', 1024) &&
+        isOptionalString(data, 'productURL', 1024) &&
+        data.createdAt is timestamp;
+    }
+
+    // 4. Collection Rules
+
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isAdmin() && resource.data.uid is string;
+      allow create: if isValidId(uid) && isAuthed() && isValidAdminMarker(incoming(), uid) &&
+        incoming().createdAt == request.time &&
+        (isAdmin() || (isBootstrappedAdmin() && uid == request.auth.uid));
+      allow update: if false;
+      allow delete: if isValidId(uid) && isAdmin() && uid != request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow get: if isValidId(uid) && isAuthed();
+      allow list: if isAuthed() && resource.data.uid is string;
+      allow create: if isValidId(uid) && isAuthed() && isValidUserProfile(incoming(), uid) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isAdmin() || (isOwner(uid) && incoming().role == 'participant' && incoming().wishesCount == 0 && incoming().active == true));
+      allow update: if isValidId(uid) && isAuthed() && isValidUserProfile(incoming(), uid) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL', 'role', 'active', 'updatedAt'])) ||
+          (isOwner(uid) && incoming().role == existing().role && incoming().active == existing().active &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL', 'wishesCount', 'lastWishAt', 'updatedAt']))
+        );
+      allow delete: if isValidId(uid) && isAdmin() && uid != request.auth.uid;
+
+      match /private/{docId} {
+        allow get: if isValidId(uid) && isValidId(docId) && (isOwner(uid) || isAdmin());
+        allow list: if isValidId(uid) && (isOwner(uid) || isAdmin()) && resource.data.uid == uid;
+        allow create: if isValidId(uid) && isValidId(docId) && docId == 'contact' && isAuthed() &&
+          isValidUserPrivate(incoming(), uid) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          (isOwner(uid) || isAdmin());
+        allow update: if isValidId(uid) && isValidId(docId) && docId == 'contact' && isAuthed() &&
+          isValidUserPrivate(incoming(), uid) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (isOwner(uid) || isAdmin()) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+        allow delete: if isValidId(uid) && isValidId(docId) && isAdmin();
+      }
+    }
+
+    match /events/{eventId} {
+      allow get: if isValidId(eventId) && isAuthed();
+      allow list: if isAuthed() && resource.data.eventId is string;
+      allow create: if isValidId(eventId) && isAdmin() &&
+        isValidEvent(incoming(), eventId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(eventId) && isAdmin() &&
+        isValidEvent(incoming(), eventId) &&
+        incoming().eventId == existing().eventId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'year', 'exchangeDate', 'inviteCodeHash', 'active', 'updatedAt']);
+      allow delete: if isValidId(eventId) && isAdmin();
+    }
+
+    match /invitations/{inviteId} {
+      allow get: if isValidId(inviteId) && (isAdmin() || (isAuthed() && resource.data.email == request.auth.token.email));
+      allow list: if isAdmin() || (isAuthed() && resource.data.email == request.auth.token.email);
+      allow create: if isValidId(inviteId) && isAdmin() &&
+        isValidInvitation(incoming(), inviteId) &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(inviteId) && isAuthed() &&
+        isValidInvitation(incoming(), inviteId) &&
+        incoming().inviteId == existing().inviteId &&
+        incoming().eventId == existing().eventId &&
+        incoming().createdByUid == existing().createdByUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'role', 'status', 'updatedAt'])) ||
+          (existing().email == request.auth.token.email && existing().status == 'pending' && incoming().status == 'accepted' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if isValidId(inviteId) && isAdmin();
+    }
+
+    match /wishlists/{wishlistId} {
+      allow get: if isValidId(wishlistId) && isAuthed();
+      allow list: if isAuthed() && resource.data.ownerUid is string;
+      allow create: if isValidId(wishlistId) && isAuthed() &&
+        isValidWishlist(incoming(), wishlistId) &&
+        (incoming().ownerUid == request.auth.uid || isAdmin()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(wishlistId) && isAuthed() &&
+        isValidWishlist(incoming(), wishlistId) &&
+        incoming().wishlistId == existing().wishlistId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().eventId == existing().eventId &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']);
+      allow delete: if isValidId(wishlistId) && isAdmin();
+    }
+
+    match /wishes/{wishId} {
+      allow get: if isValidId(wishId) && isAuthed();
+      allow list: if isAuthed() && resource.data.ownerUid is string;
+      allow create: if isValidId(wishId) && isAuthed() &&
+        isValidWish(incoming(), wishId) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/events/$(incoming().eventId));
+      allow update: if isValidId(wishId) && isAuthed() &&
+        isValidWish(incoming(), wishId) &&
+        incoming().wishId == existing().wishId &&
+        incoming().wishlistId == existing().wishlistId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().eventId == existing().eventId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        existing().ownerUid == request.auth.uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'description', 'imageURL', 'productURL',
+          'estimatedPrice', 'size', 'color', 'additionalDetails',
+          'priority', 'updatedAt'
+        ]);
+      allow delete: if isValidId(wishId) && isAuthed() &&
+        (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /wishAvailability/{wishId} {
+      // CRITICAL: Wish owner is strictly forbidden from reading availability status
+      allow get: if isValidId(wishId) && isAuthed() && resource.data.ownerUid != request.auth.uid;
+      allow list: if isAuthed() && resource.data.ownerUid != request.auth.uid;
+      allow create: if isValidId(wishId) && isAuthed() &&
+        isValidWishAvailability(incoming(), wishId) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().isReserved == false &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(wishId) && isAuthed() &&
+        isValidWishAvailability(incoming(), wishId) &&
+        existing().ownerUid != request.auth.uid &&
+        incoming().wishId == existing().wishId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().eventId == existing().eventId &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isReserved', 'updatedAt']) &&
+        (
+          (existing().isReserved == false && incoming().isReserved == true &&
+            getAfter(/databases/$(database)/documents/reservations/$(wishId)).data.reservedByUid == request.auth.uid) ||
+          (existing().isReserved == true && incoming().isReserved == false &&
+            !existsAfter(/databases/$(database)/documents/reservations/$(wishId)) &&
+            get(/databases/$(database)/documents/reservations/$(wishId)).data.reservedByUid == request.auth.uid)
+        );
+      allow delete: if isValidId(wishId) && isAuthed() &&
+        (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /reservations/{wishId} {
+      // CRITICAL: Only the reserver can read or delete their own reservation; not even Admin can spy
+      allow get: if isValidId(wishId) && isAuthed() && resource.data.reservedByUid == request.auth.uid;
+      allow list: if isAuthed() && resource.data.reservedByUid == request.auth.uid;
+      allow create: if isValidId(wishId) && isAuthed() &&
+        isValidReservation(incoming(), wishId) &&
+        incoming().reservedByUid == request.auth.uid &&
+        incoming().ownerUid != request.auth.uid &&
+        incoming().createdAt == request.time &&
+        get(/databases/$(database)/documents/wishes/$(wishId)).data.ownerUid == incoming().ownerUid &&
+        get(/databases/$(database)/documents/wishes/$(wishId)).data.ownerUid != request.auth.uid &&
+        getAfter(/databases/$(database)/documents/wishAvailability/$(wishId)).data.isReserved == true;
+      allow update: if false;
+      allow delete: if isValidId(wishId) && isAuthed() &&
+        existing().reservedByUid == request.auth.uid &&
+        (
+          !exists(/databases/$(database)/documents/wishAvailability/$(wishId)) ||
+          getAfter(/databases/$(database)/documents/wishAvailability/$(wishId)).data.isReserved == false
+        );
+    }
+  }
+}
