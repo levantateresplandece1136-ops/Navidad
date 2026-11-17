@@ -3,8 +3,8 @@ import {
   Calendar,
   Check,
   Copy,
+  Link2,
   Lock,
-  Mail,
   Pencil,
   Save,
   ShieldCheck,
@@ -45,7 +45,6 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
   // Invitations
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteName, setInviteName] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>(UserRole.PARTICIPANT);
   const [sendingInvite, setSendingInvite] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -122,15 +121,13 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
     try {
       await adminCreateInvitation({
         name: inviteName,
-        email: inviteEmail,
         role: inviteRole,
         adminUid: currentUser.uid,
         eventId: activeEvent?.eventId || DEFAULT_EVENT_ID,
       });
       setInviteName('');
-      setInviteEmail('');
       setInviteRole(UserRole.PARTICIPANT);
-      onNotify('success', 'Invitación creada. Ya puedes copiar el enlace o enviarla por correo.');
+      onNotify('success', 'Invitación creada. Copia el enlace y compártelo con tu familiar.');
     } catch (err) {
       onNotify('error', getFriendlyFirebaseError(err));
     } finally {
@@ -138,18 +135,29 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
     }
   };
 
-  const buildInviteUrl = (email: string) => {
+  const buildInviteUrl = (name?: string) => {
     const base = `${window.location.origin}${window.location.pathname}`;
-    return `${base}?invite=${encodeURIComponent(email)}`;
+    return name ? `${base}?para=${encodeURIComponent(name)}` : base;
+  };
+
+  const handleCopyGeneralLink = async () => {
+    try {
+      await navigator.clipboard.writeText(buildInviteUrl());
+      setCopiedId('general');
+      setTimeout(() => setCopiedId(null), 2000);
+      onNotify('success', 'Enlace general copiado. ¡Compártelo con tu familia!');
+    } catch {
+      onNotify('error', 'No se pudo copiar al portapapeles.');
+    }
   };
 
   const handleCopyInvite = async (inv: Invitation) => {
-    const url = buildInviteUrl(inv.email);
+    const url = buildInviteUrl(inv.name);
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(inv.inviteId);
       setTimeout(() => setCopiedId(null), 2000);
-      onNotify('success', `Enlace de invitación copiado para ${inv.name}.`);
+      onNotify('success', `Enlace personalizado copiado para ${inv.name}.`);
     } catch {
       onNotify('error', 'No se pudo copiar al portapapeles.');
     }
@@ -210,7 +218,7 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
           Panel del administrador
         </h1>
         <p className="text-sm text-[#174C38]/75 max-w-2xl">
-          Configura la fecha del intercambio, invita a tus familiares por correo electrónico y gestiona perfiles. Por
+          Configura la fecha del intercambio, comparte enlaces de acceso libre para tu familia y gestiona perfiles. Por
           privacidad, nadie —ni siquiera el administrador— puede ver quién reservó los regalos de los demás.
         </p>
       </section>
@@ -309,39 +317,37 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
 
         {/* Invite Participants */}
         <section className="lg:col-span-7 rounded-3xl bg-white border border-[#174C38]/10 shadow-xs p-6 space-y-5">
-          <div className="flex items-center gap-2.5">
-            <UserPlus className="w-5 h-5 text-[#B83232]" />
-            <h2 className="font-display text-xl font-semibold text-[#174C38]">Invitar participantes</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <UserPlus className="w-5 h-5 text-[#B83232]" />
+              <h2 className="font-display text-xl font-semibold text-[#174C38]">Invitar familiares (acceso libre)</h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void handleCopyGeneralLink()}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-[#174C38]/20 text-xs font-semibold text-[#174C38] hover:bg-[#FFF8ED] inline-flex items-center gap-1.5 transition-colors"
+            >
+              {copiedId === 'general' ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
+              <span>Copiar enlace general</span>
+            </button>
           </div>
 
           <form onSubmit={handleCreateInvitation} className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-            <div className="sm:col-span-4">
+            <div className="sm:col-span-8">
               <label htmlFor="invite-name" className="block text-xs font-semibold text-[#174C38] mb-1">
-                Nombre *
+                Nombre del familiar *
               </label>
               <input
                 id="invite-name"
                 type="text"
                 value={inviteName}
                 onChange={(e) => setInviteName(e.target.value)}
-                placeholder="Ej. Sandy"
+                placeholder="Ej. Sandy, Tía Lupita o Carlos"
                 className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#174C38]/20 bg-[#FFF8ED]/45 text-sm text-[#174C38]"
               />
             </div>
-            <div className="sm:col-span-5">
-              <label htmlFor="invite-email" className="block text-xs font-semibold text-[#174C38] mb-1">
-                Correo electrónico *
-              </label>
-              <input
-                id="invite-email"
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="familiar@correo.com"
-                className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-[#174C38]/20 bg-[#FFF8ED]/45 text-sm text-[#174C38]"
-              />
-            </div>
-            <div className="sm:col-span-3">
+            <div className="sm:col-span-4">
               <label htmlFor="invite-role" className="block text-xs font-semibold text-[#174C38] mb-1">
                 Rol
               </label>
@@ -362,70 +368,54 @@ export function AdminView({ currentUser, participants, activeEvent, onNotify }: 
                 className="min-h-[44px] px-5 py-2.5 rounded-xl bg-[#B83232] hover:bg-[#942424] text-white text-sm font-semibold inline-flex items-center gap-2 transition-colors disabled:opacity-60"
               >
                 <UserPlus className="w-4 h-4" />
-                <span>{sendingInvite ? 'Creando...' : 'Crear invitación'}</span>
+                <span>{sendingInvite ? 'Creando...' : 'Crear enlace personalizado'}</span>
               </button>
             </div>
           </form>
 
           <div className="space-y-2.5 pt-2 border-t border-[#174C38]/10">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[#174C38]/65">
-              Invitaciones enviadas ({invitations.length})
+              Enlaces creados ({invitations.length})
             </h3>
             {invitations.length === 0 ? (
-              <p className="text-sm text-[#174C38]/65 py-2">Aún no has enviado invitaciones.</p>
+              <p className="text-sm text-[#174C38]/65 py-2">
+                Puedes compartir el enlace general arriba o crear un enlace personalizado con el nombre de cada familiar.
+              </p>
             ) : (
               <div className="divide-y divide-[#174C38]/10">
-                {invitations.map((inv) => {
-                  const mailSubject = encodeURIComponent(
-                    `Invitación a ${activeEvent?.name || 'NAVIDAD JUNTOS 2026'}`
-                  );
-                  const mailBody = encodeURIComponent(
-                    `¡Hola ${inv.name}!\n\nTe invitamos a compartir tu lista de deseos en NAVIDAD JUNTOS 2026.\nEntra y regístrate con tu correo (${inv.email}) aquí:\n${buildInviteUrl(
-                      inv.email
-                    )}\n\n“Porque el mejor regalo es compartir.”`
-                  );
-
-                  return (
-                    <div key={inv.inviteId} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#174C38] truncate">{inv.name}</p>
-                        <p className="text-xs text-[#174C38]/70 truncate">
-                          {inv.email} · {inv.role === UserRole.ADMIN ? 'Administrador' : 'Participante'} ·{' '}
-                          {inv.status === InvitationStatus.ACCEPTED ? 'Aceptada' : 'Pendiente'}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => void handleCopyInvite(inv)}
-                          className="min-h-[38px] px-3 py-1.5 rounded-lg border border-[#174C38]/20 text-xs font-semibold text-[#174C38] hover:bg-[#FFF8ED] inline-flex items-center gap-1.5"
-                        >
-                          {copiedId === inv.inviteId ? (
-                            <Check className="w-3.5 h-3.5 text-[#174C38]" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                          <span>Copiar enlace</span>
-                        </button>
-                        <a
-                          href={`mailto:${inv.email}?subject=${mailSubject}&body=${mailBody}`}
-                          className="min-h-[38px] px-3 py-1.5 rounded-lg bg-[#174C38] hover:bg-[#103728] text-white text-xs font-semibold inline-flex items-center gap-1.5"
-                        >
-                          <Mail className="w-3.5 h-3.5" />
-                          <span>Enviar correo</span>
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => void adminRevokeInvitation(inv.inviteId)}
-                          aria-label={`Eliminar invitación de ${inv.name}`}
-                          className="min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg text-[#B83232] hover:bg-[#B83232]/10"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                {invitations.map((inv) => (
+                  <div key={inv.inviteId} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#174C38] truncate">{inv.name}</p>
+                      <p className="text-xs text-[#174C38]/70 truncate">
+                        Acceso libre · {inv.role === UserRole.ADMIN ? 'Administrador' : 'Participante'} ·{' '}
+                        {inv.status === InvitationStatus.ACCEPTED ? 'Usada' : 'Lista para compartir'}
+                      </p>
                     </div>
-                  );
-                })}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyInvite(inv)}
+                        className="min-h-[38px] px-3 py-1.5 rounded-lg border border-[#174C38]/20 text-xs font-semibold text-[#174C38] hover:bg-[#FFF8ED] inline-flex items-center gap-1.5"
+                      >
+                        {copiedId === inv.inviteId ? (
+                          <Check className="w-3.5 h-3.5 text-[#174C38]" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                        <span>Copiar enlace</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void adminRevokeInvitation(inv.inviteId)}
+                        aria-label={`Eliminar invitación de ${inv.name}`}
+                        className="min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg text-[#B83232] hover:bg-[#B83232]/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

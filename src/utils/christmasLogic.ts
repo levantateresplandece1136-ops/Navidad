@@ -306,3 +306,32 @@ export function formatShortDate(date?: Date | null): string {
   }).format(date);
 }
 
+export function validateFreeAccessName(rawName: string): {
+  valid: boolean;
+  cleanName: string;
+  error?: string;
+} {
+  const cleanName = (rawName || '').trim().slice(0, FIELD_LIMITS.NAME_MAX);
+  if (!cleanName) {
+    return {
+      valid: false,
+      cleanName: '',
+      error: 'Escribe tu nombre para que tu familia reconozca tu lista.',
+    };
+  }
+  if (cleanName.length < 2) {
+    return {
+      valid: false,
+      cleanName,
+      error: 'Escribe al menos 2 letras para tu nombre.',
+    };
+  }
+  return { valid: true, cleanName };
+}
+
+export function detectInAppBrowser(userAgent: string): boolean {
+  if (!userAgent) return false;
+  return /WhatsApp|FBAN|FBAV|Instagram|Line\/|BytedanceWebview|musical_ly|Snapchat|Twitter/i.test(userAgent);
+}
+
+

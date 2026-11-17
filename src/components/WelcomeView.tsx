@@ -5,10 +5,10 @@ import { PineOrnamentDivider, SnowflakeCornerAccent } from './FestiveIllustratio
 
 interface WelcomeViewProps {
   onEnter: () => void;
-  inviteEmail?: string;
+  inviteName?: string;
 }
 
-export function WelcomeView({ onEnter, inviteEmail }: WelcomeViewProps) {
+export function WelcomeView({ onEnter, inviteName }: WelcomeViewProps) {
   const [imgError, setImgError] = useState(false);
 
   return (
@@ -42,9 +42,9 @@ export function WelcomeView({ onEnter, inviteEmail }: WelcomeViewProps) {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 items-stretch">
             <div className="lg:col-span-6 p-6 sm:p-10 lg:p-12 flex flex-col justify-center gap-6">
-              {inviteEmail && (
+              {inviteName && (
                 <p className="text-xs font-medium text-[#B83232]">
-                  Invitación familiar para {inviteEmail}
+                  Invitación familiar para {inviteName}
                 </p>
               )}
 

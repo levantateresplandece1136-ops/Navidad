@@ -3,7 +3,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
 import { AppView, ChristmasEvent, Reservation, UserProfile, Wish } from './types/models';
 import { auth, getFriendlyFirebaseError } from './services/firebase';
-import { syncAuthenticatedUserProfile } from './services/authService';
+import { consumeGoogleRedirectResult, syncAuthenticatedUserProfile } from './services/authService';
 import { subscribeToActiveEvent } from './services/eventService';
 import { subscribeToParticipants } from './services/userService';
 import { subscribeToMyReservations } from './services/reservationService';
@@ -30,12 +30,12 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return {
       autostart: params.get('autostart') === '1',
-      inviteEmail: params.get('invite') || '',
+      inviteName: params.get('para') || params.get('inviteName') || '',
     };
   });
 
   const [showAuthScreen, setShowAuthScreen] = useState(
-    () => inviteParams.autostart || Boolean(inviteParams.inviteEmail)
+    () => inviteParams.autostart || Boolean(inviteParams.inviteName)
   );
 
   const [activeView, setActiveView] = useState<AppView>('dashboard');
@@ -63,10 +63,6 @@ export default function App() {
 
   const hydrateUserProfile = useCallback(
     async (user: User) => {
-      if (!user.emailVerified) {
-        setCurrentUser(null);
-        return;
-      }
       try {
         const profile = await syncAuthenticatedUserProfile(user);
         setCurrentUser(profile);
@@ -77,11 +73,18 @@ export default function App() {
     [notify]
   );
 
-  // Auth state observer (Email/Password + Google with emailVerified check)
+  // Handle mobile Google redirect results if popup fell back to redirect
+  useEffect(() => {
+    void consumeGoogleRedirectResult().catch((err) => {
+      notify('error', err instanceof Error ? err.message : 'Error al volver de Google.');
+    });
+  }, [notify]);
+
+  // Auth state observer (supports Free Anonymous Access + Google)
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setFirebaseUser(user);
-      if (user && user.emailVerified) {
+      if (user) {
         await hydrateUserProfile(user);
       } else {
         setCurrentUser(null);
@@ -91,9 +94,9 @@ export default function App() {
     return () => unsub();
   }, [hydrateUserProfile]);
 
-  // Real-time Firestore listeners once authenticated and email-verified
+  // Real-time Firestore listeners once signed in
   useEffect(() => {
-    if (!currentUser || !firebaseUser || !firebaseUser.emailVerified) {
+    if (!currentUser || !firebaseUser) {
       setParticipants([]);
       setMyReservations([]);
       setActiveEvent(null);
@@ -138,7 +141,7 @@ export default function App() {
       unsubParticipants();
       unsubReservations();
     };
-  }, [currentUser?.uid, firebaseUser?.uid, firebaseUser?.emailVerified]);
+  }, [currentUser?.uid, firebaseUser?.uid]);
 
   const handleNavigate = (view: AppView) => {
     if (view === 'wishlist' && currentUser) {
@@ -188,15 +191,13 @@ export default function App() {
     );
   }
 
-  const pendingVerificationUser = firebaseUser && !firebaseUser.emailVerified ? firebaseUser : null;
-
-  if (!firebaseUser || pendingVerificationUser || !currentUser) {
-    if (!showAuthScreen && !pendingVerificationUser) {
+  if (!firebaseUser || !currentUser) {
+    if (!showAuthScreen) {
       return (
         <>
           <WelcomeView
             onEnter={() => setShowAuthScreen(true)}
-            inviteEmail={inviteParams.inviteEmail || undefined}
+            inviteName={inviteParams.inviteName || undefined}
           />
           <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
         </>
@@ -206,9 +207,7 @@ export default function App() {
     return (
       <>
         <AuthView
-          initialEmail={inviteParams.inviteEmail}
-          pendingVerificationUser={pendingVerificationUser}
-          onVerificationConfirmed={hydrateUserProfile}
+          initialName={inviteParams.inviteName}
           onBackToWelcome={() => setShowAuthScreen(false)}
         />
         <ToastBanner toast={toast} onDismiss={() => setToast(null)} />
@@ -267,6 +266,7 @@ export default function App() {
           <ProfileView
             currentUser={currentUser}
             userEmail={firebaseUser.email || ''}
+            isAnonymous={firebaseUser.isAnonymous}
             onOpenAdmin={() => handleNavigate('admin')}
             onNotify={notify}
           />

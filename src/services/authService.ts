@@ -1,10 +1,8 @@
 import {
-  createUserWithEmailAndPassword,
-  reload,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
+  getRedirectResult,
+  signInAnonymously,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile,
   User,
@@ -26,30 +24,24 @@ import {
   BOOTSTRAPPED_ADMIN_EMAIL,
   DEFAULT_EVENT_ID,
   DEFAULT_EXCHANGE_DATE,
+  validateFreeAccessName,
 } from '../utils/christmasLogic';
 
 export function translateAuthError(error: unknown): string {
   const code = (error as { code?: string })?.code || '';
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
   switch (code) {
-    case 'auth/invalid-email':
-      return 'El correo electrónico no tiene un formato válido.';
-    case 'auth/user-disabled':
-      return 'Esta cuenta ha sido deshabilitada. Consulta con el administrador familiar.';
-    case 'auth/user-not-found':
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'Correo o contraseña incorrectos. Verifica tus datos e inténtalo de nuevo.';
-    case 'auth/email-already-in-use':
-      return 'Ya existe una cuenta registrada con este correo. Intenta iniciar sesión o recuperar tu contraseña.';
-    case 'auth/weak-password':
-      return 'La contraseña debe tener al menos 6 caracteres.';
     case 'auth/popup-closed-by-user':
-      return 'Se cerró la ventana de inicio de sesión antes de completar el acceso.';
+      return 'Se cerró la ventana de Google antes de completar el acceso.';
     case 'auth/popup-blocked':
-      return 'El navegador bloqueó la ventana emergente de Google. Permite ventanas emergentes para este sitio.';
+      return 'Tu celular bloqueó la ventana de Google. Puedes entrar arriba escribiendo solo tu nombre.';
+    case 'auth/unauthorized-domain':
+      return `Falta autorizar este dominio (${host}) en Firebase Console → Authentication → Settings → Authorized domains, o entra directo arriba solo con tu nombre.`;
     case 'auth/operation-not-allowed':
     case 'auth/admin-restricted-operation':
-      return 'El inicio de sesión con correo y contraseña aún no está activado en Firebase Console → Authentication → Sign-in method. Actívalo o inicia sesión con Google.';
+      return 'El administrador debe activar el proveedor «Anónimo» en Firebase Console → Authentication → Sign-in method para habilitar el acceso libre.';
+    case 'auth/network-request-failed':
+      return 'Error de conexión con Firebase. Verifica tu internet e inténtalo de nuevo.';
     case 'auth/too-many-requests':
       return 'Demasiados intentos seguidos. Espera un momento antes de volver a intentarlo.';
     default:
@@ -57,56 +49,52 @@ export function translateAuthError(error: unknown): string {
   }
 }
 
-export async function loginWithGoogle(): Promise<User> {
+export async function loginWithGoogle(): Promise<User | null> {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error) {
+    const code = (error as { code?: string })?.code || '';
+    if (
+      code === 'auth/popup-blocked' ||
+      code === 'auth/operation-not-supported-in-this-environment' ||
+      code === 'auth/cancelled-popup-request'
+    ) {
+      try {
+        await signInWithRedirect(auth, googleProvider);
+        return null;
+      } catch (redirectError) {
+        throw new Error(translateAuthError(redirectError));
+      }
+    }
     throw new Error(translateAuthError(error));
   }
 }
 
-export async function loginWithEmail(email: string, password: string): Promise<User> {
+export async function consumeGoogleRedirectResult(): Promise<User | null> {
   try {
-    const result = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
-    return result.user;
+    const res = await getRedirectResult(auth);
+    return res?.user || null;
   } catch (error) {
     throw new Error(translateAuthError(error));
   }
 }
 
-export async function registerWithEmail(name: string, email: string, password: string): Promise<User> {
-  const cleanName = name.trim().slice(0, 100);
-  if (!cleanName) {
-    throw new Error('Escribe tu nombre para que tu familia reconozca tu lista.');
+/**
+ * Acceso libre sin correo electrónico, contraseña ni WhatsApp.
+ * Usa Firebase Anonymous Auth y crea/actualiza el perfil familiar del dispositivo.
+ */
+export async function loginFreeWithName(name: string): Promise<User> {
+  const validation = validateFreeAccessName(name);
+  if (!validation.valid) {
+    throw new Error(validation.error || 'Escribe tu nombre para continuar.');
   }
 
   try {
-    const cred = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
-    await updateProfile(cred.user, { displayName: cleanName });
-    await sendEmailVerification(cred.user);
+    const cred = await signInAnonymously(auth);
+    await updateProfile(cred.user, { displayName: validation.cleanName });
+    await syncAuthenticatedUserProfile(cred.user, { overrideName: validation.cleanName });
     return cred.user;
-  } catch (error) {
-    throw new Error(translateAuthError(error));
-  }
-}
-
-export async function resendVerificationEmail(user: User): Promise<void> {
-  try {
-    await sendEmailVerification(user);
-  } catch (error) {
-    throw new Error(translateAuthError(error));
-  }
-}
-
-export async function refreshAuthUser(user: User): Promise<User> {
-  await reload(user);
-  return auth.currentUser || user;
-}
-
-export async function sendPasswordRecovery(email: string): Promise<void> {
-  try {
-    await sendPasswordResetEmail(auth, email.trim().toLowerCase());
   } catch (error) {
     throw new Error(translateAuthError(error));
   }
@@ -117,17 +105,22 @@ export async function logoutUser(): Promise<void> {
 }
 
 /**
- * Sincroniza el perfil del usuario autenticado con correo verificado (Email/Password o Google),
- * aplica invitaciones pendientes por correo y garantiza el evento por defecto si es administrador.
+ * Sincroniza el perfil del usuario autenticado (Acceso libre o Google)
+ * y garantiza que el evento navideño por defecto exista.
  */
-export async function syncAuthenticatedUserProfile(firebaseUser: User): Promise<UserProfile> {
+export async function syncAuthenticatedUserProfile(
+  firebaseUser: User,
+  options?: { overrideName?: string }
+): Promise<UserProfile> {
   const uid = firebaseUser.uid;
   const email = (firebaseUser.email || '').trim().toLowerCase();
-  if (!email) {
-    throw new Error('Tu cuenta necesita un correo electrónico verificado para continuar.');
-  }
-
-  const displayName = (firebaseUser.displayName || email.split('@')[0] || 'Familiar').trim().slice(0, 100);
+  const displayName = (
+    options?.overrideName ||
+    firebaseUser.displayName ||
+    (email ? email.split('@')[0] : 'Familiar')
+  )
+    .trim()
+    .slice(0, 100);
   const isRootAdmin = Boolean(firebaseUser.emailVerified && email === BOOTSTRAPPED_ADMIN_EMAIL.toLowerCase());
 
   // 1. Check admin marker
@@ -153,29 +146,31 @@ export async function syncAuthenticatedUserProfile(firebaseUser: User): Promise<
     }
   }
 
-  // 2. Check pending invitation matching verified email
+  // 2. Check pending invitation matching verified email (when using Google)
   let invitedRole: UserRole | null = null;
   let invitedName: string | null = null;
-  try {
-    const invQ = query(
-      collection(db, 'invitations'),
-      where('email', '==', email),
-      where('status', '==', InvitationStatus.PENDING)
-    );
-    const invSnap = await getDocs(invQ);
-    if (!invSnap.empty) {
-      const invDoc = invSnap.docs[0];
-      const invData = invDoc.data();
-      invitedRole = invData.role === UserRole.ADMIN ? UserRole.ADMIN : UserRole.PARTICIPANT;
-      invitedName = typeof invData.name === 'string' ? invData.name : null;
+  if (email && firebaseUser.emailVerified) {
+    try {
+      const invQ = query(
+        collection(db, 'invitations'),
+        where('email', '==', email),
+        where('status', '==', InvitationStatus.PENDING)
+      );
+      const invSnap = await getDocs(invQ);
+      if (!invSnap.empty) {
+        const invDoc = invSnap.docs[0];
+        const invData = invDoc.data();
+        invitedRole = invData.role === UserRole.ADMIN ? UserRole.ADMIN : UserRole.PARTICIPANT;
+        invitedName = typeof invData.name === 'string' ? invData.name : null;
 
-      await updateDoc(invDoc.ref, {
-        status: InvitationStatus.ACCEPTED,
-        updatedAt: serverTimestamp(),
-      });
+        await updateDoc(invDoc.ref, {
+          status: InvitationStatus.ACCEPTED,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch {
+      // Non-fatal if no matching email invitation exists
     }
-  } catch {
-    // Non-fatal if no matching invitation exists
   }
 
   const userRef = doc(db, 'users', uid);
@@ -211,10 +206,12 @@ export async function syncAuthenticatedUserProfile(firebaseUser: User): Promise<
   } else {
     const existingData = userSnap.data();
     const shouldPromoteAdmin = isRootAdmin && existingData?.role !== UserRole.ADMIN;
-    if (shouldPromoteAdmin) {
+    const shouldUpdateName = Boolean(options?.overrideName && options.overrideName !== existingData?.name);
+    if (shouldPromoteAdmin || shouldUpdateName) {
       try {
         await updateDoc(userRef, {
-          role: UserRole.ADMIN,
+          ...(shouldPromoteAdmin ? { role: UserRole.ADMIN } : {}),
+          ...(shouldUpdateName ? { name: displayName } : {}),
           updatedAt: serverTimestamp(),
         });
       } catch (error) {
@@ -223,47 +220,47 @@ export async function syncAuthenticatedUserProfile(firebaseUser: User): Promise<
     }
   }
 
-  // 3. Ensure private contact record exists with verified email only
-  const privateRef = doc(db, 'users', uid, 'private', 'contact');
-  try {
-    const privateSnap = await getDoc(privateRef);
-    if (!privateSnap.exists()) {
-      await setDoc(privateRef, {
-        uid,
-        email,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    } else if (privateSnap.data()?.email !== email) {
-      await updateDoc(privateRef, {
-        email,
-        updatedAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `users/${uid}/private/contact`);
-  }
-
-  // 4. Ensure default event exists when admin logs in
-  if (resolvedRole === UserRole.ADMIN) {
-    const eventRef = doc(db, 'events', DEFAULT_EVENT_ID);
+  // 3. Store private email contact only when signed in with an email provider (e.g. Google)
+  if (email) {
+    const privateRef = doc(db, 'users', uid, 'private', 'contact');
     try {
-      const eventSnap = await getDoc(eventRef);
-      if (!eventSnap.exists()) {
-        await setDoc(eventRef, {
-          eventId: DEFAULT_EVENT_ID,
-          name: 'NAVIDAD JUNTOS 2026',
-          year: 2026,
-          exchangeDate: DEFAULT_EXCHANGE_DATE,
-          inviteCodeHash: '',
-          active: true,
+      const privateSnap = await getDoc(privateRef);
+      if (!privateSnap.exists()) {
+        await setDoc(privateRef, {
+          uid,
+          email,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+      } else if (privateSnap.data()?.email !== email) {
+        await updateDoc(privateRef, {
+          email,
+          updatedAt: serverTimestamp(),
+        });
       }
-    } catch {
-      // Non-fatal
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${uid}/private/contact`);
     }
+  }
+
+  // 4. Ensure default event exists so any participant can publish wishes immediately
+  const eventRef = doc(db, 'events', DEFAULT_EVENT_ID);
+  try {
+    const eventSnap = await getDoc(eventRef);
+    if (!eventSnap.exists()) {
+      await setDoc(eventRef, {
+        eventId: DEFAULT_EVENT_ID,
+        name: 'NAVIDAD JUNTOS 2026',
+        year: 2026,
+        exchangeDate: DEFAULT_EXCHANGE_DATE,
+        inviteCodeHash: '',
+        active: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch {
+    // Non-fatal
   }
 
   const finalSnap = await getDoc(userRef);

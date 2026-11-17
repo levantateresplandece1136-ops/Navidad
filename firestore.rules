@@ -25,11 +25,11 @@ service cloud.firestore {
     }
 
     function isEmailVerified() {
-      return request.auth.token.email_verified == true;
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
     function isAuthed() {
-      return isSignedIn() && isEmailVerified();
+      return isSignedIn();
     }
 
     function isOwner(uid) {
@@ -37,7 +37,7 @@ service cloud.firestore {
     }
 
     function isBootstrappedAdmin() {
-      return isAuthed() && request.auth.token.email == 'levantate.resplandece.11.36@gmail.com';
+      return isEmailVerified() && request.auth.token.email == 'levantate.resplandece.11.36@gmail.com';
     }
 
     function isAdmin() {
@@ -102,13 +102,13 @@ service cloud.firestore {
     }
 
     function isValidInvitation(data, inviteId) {
-      return data.keys().hasAll(['inviteId', 'eventId', 'name', 'email', 'role', 'status', 'createdByUid', 'createdAt', 'updatedAt']) &&
+      return data.keys().hasAll(['inviteId', 'eventId', 'name', 'role', 'status', 'createdByUid', 'createdAt', 'updatedAt']) &&
         data.keys().hasOnly(['inviteId', 'eventId', 'name', 'email', 'role', 'status', 'createdByUid', 'createdAt', 'updatedAt']) &&
         data.inviteId == inviteId &&
         isValidId(data.inviteId) &&
         isValidId(data.eventId) &&
         data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
-        data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+        isOptionalString(data, 'email', 254) &&
         data.role in ['admin', 'participant'] &&
         data.status in ['pending', 'accepted', 'revoked'] &&
         isValidId(data.createdByUid) &&
@@ -226,10 +226,11 @@ service cloud.firestore {
     match /events/{eventId} {
       allow get: if isValidId(eventId) && isAuthed();
       allow list: if isAuthed() && resource.data.eventId is string;
-      allow create: if isValidId(eventId) && isAdmin() &&
+      allow create: if isValidId(eventId) && isAuthed() &&
         isValidEvent(incoming(), eventId) &&
         incoming().createdAt == request.time &&
-        incoming().updatedAt == request.time;
+        incoming().updatedAt == request.time &&
+        (isAdmin() || eventId == 'navidad-2026');
       allow update: if isValidId(eventId) && isAdmin() &&
         isValidEvent(incoming(), eventId) &&
         incoming().eventId == existing().eventId &&
@@ -240,8 +241,8 @@ service cloud.firestore {
     }
 
     match /invitations/{inviteId} {
-      allow get: if isValidId(inviteId) && (isAdmin() || (isAuthed() && resource.data.email == request.auth.token.email));
-      allow list: if isAdmin() || (isAuthed() && resource.data.email == request.auth.token.email);
+      allow get: if isValidId(inviteId) && (isAdmin() || (isEmailVerified() && resource.data.email == request.auth.token.email));
+      allow list: if isAdmin() || (isEmailVerified() && resource.data.email == request.auth.token.email);
       allow create: if isValidId(inviteId) && isAdmin() &&
         isValidInvitation(incoming(), inviteId) &&
         incoming().createdByUid == request.auth.uid &&
@@ -256,7 +257,7 @@ service cloud.firestore {
         incoming().updatedAt == request.time &&
         (
           (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'role', 'status', 'updatedAt'])) ||
-          (existing().email == request.auth.token.email && existing().status == 'pending' && incoming().status == 'accepted' &&
+          (isEmailVerified() && existing().email == request.auth.token.email && existing().status == 'pending' && incoming().status == 'accepted' &&
             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
         );
       allow delete: if isValidId(inviteId) && isAdmin();

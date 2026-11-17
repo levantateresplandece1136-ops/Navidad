@@ -7,7 +7,7 @@ service firebase.storage {
     }
 
     function isAuthed() {
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null && request.auth.uid != null;
     }
 
     function isValidImageUpload() {

@@ -186,7 +186,7 @@
           "format": "date-time"
         }
       },
-      "required": ["inviteId", "eventId", "name", "email", "role", "status", "createdByUid", "createdAt", "updatedAt"]
+      "required": ["inviteId", "eventId", "name", "role", "status", "createdByUid", "createdAt", "updatedAt"]
     },
     "Wishlist": {
       "title": "Wishlist",

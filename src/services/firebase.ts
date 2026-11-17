@@ -95,7 +95,7 @@ export function getFriendlyFirebaseError(error: unknown): string {
     return 'Se alcanzó temporalmente el límite diario de consultas de la base de datos. Intenta nuevamente mañana o revisa el plan en Firebase Console.';
   }
   if (parsedMsg.includes('permission-denied') || parsedMsg.includes('Missing or insufficient permissions')) {
-    return 'No tienes permiso para realizar esta acción o tu correo aún no ha sido verificado.';
+    return 'No tienes permiso para realizar esta acción. Recarga la página o vuelve a entrar.';
   }
   if (parsedMsg.includes('unavailable') || parsedMsg.includes('offline')) {
     return 'Parece que no hay conexión con Firebase en este momento. Revisa tu internet e intenta de nuevo.';

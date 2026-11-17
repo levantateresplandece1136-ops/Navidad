@@ -174,20 +174,20 @@ export function subscribeToInvitations(
 
 export async function adminCreateInvitation(params: {
   name: string;
-  email: string;
+  email?: string;
   role: UserRole;
   adminUid: string;
   eventId?: string;
 }): Promise<Invitation> {
   const cleanName = params.name.trim().slice(0, 100);
-  const cleanEmail = params.email.trim().toLowerCase().slice(0, 254);
+  const cleanEmail = (params.email || '').trim().toLowerCase().slice(0, 254);
 
   if (!cleanName) {
     throw new Error('Ingresa el nombre de tu familiar.');
   }
 
-  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-    throw new Error('Ingresa un correo electrónico válido para la invitación.');
+  if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    throw new Error('Si incluyes correo electrónico, verifica que sea válido.');
   }
 
   const inviteId = `inv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

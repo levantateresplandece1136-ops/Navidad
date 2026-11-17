@@ -23,11 +23,7 @@ interface CancelReservationPayload {
  */
 export const reserveWish = onCall<ReserveWishPayload>(async (request) => {
   if (!request.auth || !request.auth.uid) {
-    throw new HttpsError('unauthenticated', 'Debes iniciar sesión para reservar un regalo.');
-  }
-
-  if (request.auth.token.email_verified !== true) {
-    throw new HttpsError('permission-denied', 'Verifica tu correo electrónico antes de reservar.');
+    throw new HttpsError('unauthenticated', 'Debes entrar a tu lista familiar para reservar un regalo.');
   }
 
   const wishId = request.data?.wishId?.trim();

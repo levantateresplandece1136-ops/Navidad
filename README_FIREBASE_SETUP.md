@@ -16,12 +16,12 @@
 
 El proyecto ya cuenta con su archivo de configuración en `firebase-applet-config.json` y las reglas de **Firestore** (`firestore.rules`) desplegadas. Para activar todas las capacidades opcionales (subida de fotografías, inicio de sesión con correo/contraseña y Cloud Functions):
 
-### A. Firebase Authentication (Correo electrónico y Google)
+### A. Firebase Authentication (Acceso libre sin correo ni WhatsApp + Google)
 1. Ingresa a **Firebase Console** → tu proyecto → **Authentication** → **Sign-in method**.
-2. **Google**: ya viene configurado automáticamente.
-3. **Correo electrónico / contraseña**:
-   - Haz clic en **Agregar nuevo proveedor** → **Correo electrónico/contraseña** → **Habilitar** → **Guardar**.
-   - Con esto funcionará el registro de participantes por correo, la verificación de correo y la recuperación de contraseña.
+2. **Anónimo (obligatorio para acceso libre desde cualquier celular)**:
+   - Haz clic en **Agregar nuevo proveedor** → **Anónimo** → **Habilitar** → **Guardar**.
+   - Con esto, cualquier familiar puede entrar al instante escribiendo solo su nombre, sin correo, sin contraseña y sin WhatsApp, incluso desde navegadores integrados en celulares.
+3. **Google (para el administrador)**: ya viene configurado. En **Authentication → Settings → Authorized domains**, asegúrate de que el dominio público de la app (`ais-pre-...run.app` o tu dominio `.web.app`) esté agregado.
 
 ### B. Firebase Storage (para fotografías de regalos y avatares)
 1. En **Firebase Console** → **Storage** → **Comenzar**.

@@ -75,7 +75,7 @@ export interface Invitation {
   inviteId: string;
   eventId: string;
   name: string;
-  email: string;
+  email?: string;
   role: UserRole;
   status: InvitationStatus;
   createdByUid: string;

@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {
   calculateCountdown,
   canUserReserveWish,
+  detectInAppBrowser,
   filterParticipants,
   isValidFirestoreId,
   sanitizeExternalUrl,
   shouldExposeAvailabilityToViewer,
   sortWishesByPriorityAndDate,
+  validateFreeAccessName,
   validateWishInput,
 } from './christmasLogic';
 import { UserProfile, UserRole, Wish, WishPriority } from '../types/models';
@@ -150,4 +152,21 @@ test('isValidFirestoreId rejects path traversal and oversized IDs', () => {
   assert.equal(isValidFirestoreId(''), false);
   assert.equal(isValidFirestoreId('a'.repeat(129)), false);
 });
+
+test('validateFreeAccessName and detectInAppBrowser validate free name entry and WebViews', () => {
+  const empty = validateFreeAccessName('   ');
+  assert.equal(empty.valid, false);
+  assert.ok(empty.error);
+
+  const short = validateFreeAccessName('A');
+  assert.equal(short.valid, false);
+
+  const valid = validateFreeAccessName('  Tía Lupita  ');
+  assert.equal(valid.valid, true);
+  assert.equal(valid.cleanName, 'Tía Lupita');
+
+  assert.equal(detectInAppBrowser('Mozilla/5.0 WhatsApp/2.24'), true);
+  assert.equal(detectInAppBrowser('Mozilla/5.0 Chrome/120.0 Mobile Safari/537.36'), false);
+});
+
 

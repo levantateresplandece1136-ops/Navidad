@@ -1,25 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, LogOut, Save, ShieldCheck } from 'lucide-react';
 import { UserProfile, UserRole } from '../types/models';
-import { FIELD_LIMITS } from '../utils/christmasLogic';
+import { FIELD_LIMITS, validateFreeAccessName } from '../utils/christmasLogic';
 import { uploadAvatarImage } from '../services/storageService';
 import { updateOwnProfile } from '../services/userService';
 import { logoutUser } from '../services/authService';
 import { getFriendlyFirebaseError } from '../services/firebase';
 import { AvatarCircle } from './FestiveIllustrations';
+import { ConfirmModal } from './ConfirmModal';
 
 interface ProfileViewProps {
   currentUser: UserProfile;
   userEmail: string;
+  isAnonymous: boolean;
   onOpenAdmin: () => void;
   onNotify: (type: 'success' | 'error', message: string) => void;
 }
 
-export function ProfileView({ currentUser, userEmail, onOpenAdmin, onNotify }: ProfileViewProps) {
+export function ProfileView({
+  currentUser,
+  userEmail,
+  isAnonymous,
+  onOpenAdmin,
+  onNotify,
+}: ProfileViewProps) {
   const [name, setName] = useState(currentUser.name);
   const [photoURL, setPhotoURL] = useState(currentUser.photoURL || '');
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -46,20 +55,28 @@ export function ProfileView({ currentUser, userEmail, onOpenAdmin, onNotify }: P
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanName = name.trim();
-    if (!cleanName) {
-      onNotify('error', 'Tu nombre no puede quedar vacío.');
+    const validation = validateFreeAccessName(name);
+    if (!validation.valid) {
+      onNotify('error', validation.error || 'Tu nombre no puede quedar vacío.');
       return;
     }
 
     setSaving(true);
     try {
-      await updateOwnProfile(currentUser.uid, { name: cleanName, photoURL });
+      await updateOwnProfile(currentUser.uid, { name: validation.cleanName, photoURL });
       onNotify('success', 'Perfil actualizado.');
     } catch (err) {
       onNotify('error', getFriendlyFirebaseError(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLogoutClick = () => {
+    if (isAnonymous) {
+      setConfirmLogoutOpen(true);
+    } else {
+      void logoutUser();
     }
   };
 
@@ -91,7 +108,7 @@ export function ProfileView({ currentUser, userEmail, onOpenAdmin, onNotify }: P
           <div className="space-y-1">
             <h1 className="font-display text-2xl sm:text-3xl font-semibold text-[#174C38]">Mi perfil</h1>
             <p className="text-sm text-[#174C38]/75">
-              {userEmail || 'Correo verificado'} ·{' '}
+              {userEmail || 'Acceso libre familiar'} ·{' '}
               <span className="font-semibold text-[#B83232]">
                 {currentUser.role === UserRole.ADMIN ? 'Administrador' : 'Participante'}
               </span>
@@ -127,7 +144,7 @@ export function ProfileView({ currentUser, userEmail, onOpenAdmin, onNotify }: P
 
             <button
               type="button"
-              onClick={() => void logoutUser()}
+              onClick={handleLogoutClick}
               className="min-h-[44px] px-4 py-2.5 rounded-xl border border-[#B83232]/25 text-sm font-semibold text-[#B83232] hover:bg-[#B83232] hover:text-white inline-flex items-center gap-2 transition-colors"
             >
               <LogOut className="w-4 h-4" />
@@ -145,7 +162,7 @@ export function ProfileView({ currentUser, userEmail, onOpenAdmin, onNotify }: P
               <span>Panel del administrador</span>
             </h2>
             <p className="text-sm text-[#174C38]/75">
-              Administra participantes, invitaciones por correo, roles y la fecha del intercambio navideño.
+              Administra participantes, enlaces de invitación, roles y la fecha del intercambio navideño.
             </p>
           </div>
           <button
@@ -157,6 +174,19 @@ export function ProfileView({ currentUser, userEmail, onOpenAdmin, onNotify }: P
           </button>
         </section>
       )}
+
+      <ConfirmModal
+        open={confirmLogoutOpen}
+        title="¿Salir de tu sesión?"
+        message="Como entraste en modo acceso libre, tu lista está guardada en este navegador. Si cierras sesión y vuelves a entrar, se abrirá un perfil nuevo."
+        confirmLabel="Sí, salir"
+        variant="danger"
+        onConfirm={() => {
+          setConfirmLogoutOpen(false);
+          void logoutUser();
+        }}
+        onCancel={() => setConfirmLogoutOpen(false)}
+      />
     </div>
   );
 }
